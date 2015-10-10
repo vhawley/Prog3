@@ -17,120 +17,100 @@
 
 #define MAX_LINE 4096
 
+void * get_in_addr(struct sockaddr *sa)
+{
+	// Always using IPv4 for Networks class, no need to consider IPv6
+	return &(((struct sockaddr_in*)sa)->sin_addr);
+}
+
+
+/////////////////////////////  MAIN FUNCITON  ///////////////////////////////////////////////
+
 int main(int argc, char *argv[])
 {
 	// Ensure proper usage ("./tcpclient <server> <port> <file>")
 	if (argc != 4)
 	{
-		cout << "udpclient: ERROR! Incorrect udpclient takes three arguments!" << endl;
-		cout << "usage: \"./udpclient <server> <port> <file>\"" << endl;
+		fprintf(stderr, "tcpclient: ERROR!!! Incorrect udpclient takes three arguments!\n");
+		fprintf(stderr, "usage: \"./udpclient <server> <port> <file>\"\n");
 		exit(1);
 	}
 	// Record the arguments in string objects
 	char* server = argv[1];
 	char* port = argv[2];
 	char* req_file = argv[3];
-	
-
-	struct hostent *hp;
-	struct sockaddr_in sockin;
-	char *host;
-	char *buffer[MAX_LINE]
-	int s;
-	int len;
-
-	// First we must translate the passed in hostname to its IP address
-	hp = gethostbyname(host);
-
-	// DONT TRUST ANYTHING BELOW HERE!!! IT IS FOR REFERENCE
-
-	/*
-
-	struct addrinfo hints, *serverinfo, *localinfo;
-
-	// Prepare hints struct for getaddrinfo call
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family =  AF_INET;
-	hints.ai_socktype = SOCK_DGRAM;
-	hints.ai_flags = AI_PASSIVE;	// Fill in IP automatically
-	
-	// Lookup the hostname and store its info
-	if ((s=getaddrinfo(server.c_str(),port,&hints,&serverinfo)) != 0)
+	// Ensure that the port is actually a port number
+	if (atoi(port) > 65536)
 	{
-		cout << "udpclient: getaddrinfo error: " << gai_strerror(s) << endl;
+		fprintf(stderr, "tcpclient: ERROR!!! Invalid port number!\n");
+		fprintf(stderr, "Port number must be in range [1-65536]")
 		exit(1);
 	}
 	
-	// Create a socket for the client
-	if ( (s=socket(serverinfo->ai_family,serverinfo->ai_socktype,serverinfo->ai_protocol)) < 0)
+	// Initialize variables for TCP connection
+	int sockfd, numbytes, servercheck;
+	char buf[MAX_LINE];
+	struct addrinfo help, *serverinfo, *p;
+	char s[INET6_ADDRSTRLEN];
+
+	// Clear the helper addrinfo to ensure no unexpected behavior
+	memset($hints, 0, sizeof hints);
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+
+	// Get the host information
+	if ( (servercheck = getaddrinfo(server, port, &help, &serverinfo)) != 0 )
 	{
-		cout << "udpclient: ERROR! Socket creation failed!" << endl;
+		fprintf(stderr, "tcpclient: ERROR!!! Call to getaddrinfo() failed!\n");
+		fpritnf(stderr, "errno: %s\n", gai_strerror(servercheck));
 		exit(1);
 	}
 
-	// Send the datagram to the server and record the time of day for RTT calc
-	int buflen = strlen(buffer.c_str());
-	
-	int sent_bytes = sendto(s,buffer.c_str(),buflen,0,serverinfo->ai_addr,serverinfo->ai_addrlen);
-	if (sent_bytes < 0)
+	// Loop through all results for server and connect to first possible
+	for (p=serverinfo; p!=NULL; p=p->ai_next)
 	{
-		cout << "udpclient: ERROR! Packet not sent!" << endl;
-		cout << "errno: " << strerror(errno) << endl;
-		exit(1);
-	}
-	// Ensure all of the bytes were sent
-	if (sent_bytes < buflen )
-	{
-		cout << "Handle unsent case:" << endl;
-		cout << buflen << ":" << sent_bytes << endl;
-		cout << buffer.c_str() << endl;
-	}
-
-
-	// Step 3: receive the file from the server
-	// Set up parameters for recvfrom call
-	char str_rcvd[buflen];
-	struct sockaddr_storage raddr;
-	socklen_t slen = sizeof raddr;
-
-	// Call recvfrom and check return value for correctness
-	int recv_bytes = recvfrom(s,str_rcvd,16384,0,(sockaddr *)(&raddr),&slen);
-	if (recv_bytes < 0)
-	{
-		cout << "udpclient: ERROR! Packet not properly received!" << endl;
-		cout << "errno: " << strerror(errno) << endl;
-		exit(1);
-	}
-
-	str_rcvd[recv_bytes] = 0;
-
-
-	
-	// Step 4: decrypt the file
-	int i, max = strlen(str_rcvd);
-	for (i=ceil(max/2)-1; i>=0; i--)
-	{
-		if (i%2 == 0)
+		// Create a socket 
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, 0) == -1)
 		{
-			char temp = str_rcvd[i];
-			str_rcvd[i] = str_rcvd[max-i-1];
-			str_rcvd[max-i-1] = temp;
+			fprintf(stderr, "tcpclient: ERROR!!! Call to socket() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno);
+			exit(1);
 		}
+		// Connect the socket to the host
+		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
+		{
+			close(sockfd);
+			fprintf(stderr, "tcpclient: ERROR!!! Call to connect() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno));
+			exit(1);
+		}
+
+		// Once the connection is established break from the loop
+		break;
 	}
-	
-	cout << str_rcvd;
-//	for (int i=0; i<strlen(str_rcvd); i++)
-//		cout << i%10;
-	cout << endl << strlen(str_rcvd) << endl;
 
-	// Step 5: Compute the RTT of the message (microseconds)
-	int time = time2.tv_usec - time1.tv_usec;
-	cout << "RTT (microseconds): " << time << endl;
+	// Make sure the connection server info wasnt invalidated
+	if (p == NULL)
+	{
+		fprintf(stderr, "tcpclient: Failed to connect to host\n");
+		exit(1);
+	}
 
+	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
+	printf("tcpclient: Connect to %s\n", s);
 
-	// Step 6: Display resulting response from server and RTT
+	freeaddrinfo(servinfo);
 
-	*/
+	if ((numbytes = recv(sockfd, buf, MAX_LINE-1, 0) < 0)
+	{
+		fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
+		fprintf(stderr, "errno: %s\n", strerror(errno));
+		exit(1);
+	}
+
+	buf[numbytes] = "tcpclient: received '%s'\n", buf);
+
+	close(sockfd);
 
 	return 0;
 }

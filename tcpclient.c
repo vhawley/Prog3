@@ -14,9 +14,11 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <math.h>
+#include <arpa/inet.h>
 
 #define MAX_LINE 4096
 
+// Used as a means of typecasting the sin_addr member of a sockaddr
 void * get_in_addr(struct sockaddr *sa)
 {
 	// Always using IPv4 for Networks class, no need to consider IPv6
@@ -24,15 +26,15 @@ void * get_in_addr(struct sockaddr *sa)
 }
 
 
-/////////////////////////////  MAIN FUNCITON  ///////////////////////////////////////////////
+/////////////////////////////  MAIN FUNCITON  //////////////////////////////////////////
 
 int main(int argc, char *argv[])
 {
 	// Ensure proper usage ("./tcpclient <server> <port> <file>")
 	if (argc != 4)
 	{
-		fprintf(stderr, "tcpclient: ERROR!!! Incorrect udpclient takes three arguments!\n");
-		fprintf(stderr, "usage: \"./udpclient <server> <port> <file>\"\n");
+		fprintf(stderr, "tcpclient: ERROR!!! Incorrect tcpclient takes three arguments!\n");
+		fprintf(stderr, "usage: \"./tcpclient <server> <port> <file>\"\n");
 		exit(1);
 	}
 	// Record the arguments in string objects
@@ -43,7 +45,7 @@ int main(int argc, char *argv[])
 	if (atoi(port) > 65536)
 	{
 		fprintf(stderr, "tcpclient: ERROR!!! Invalid port number!\n");
-		fprintf(stderr, "Port number must be in range [1-65536]")
+		fprintf(stderr, "Port number must be in range [1-65536]");
 		exit(1);
 	}
 	
@@ -54,15 +56,15 @@ int main(int argc, char *argv[])
 	char s[INET6_ADDRSTRLEN];
 
 	// Clear the helper addrinfo to ensure no unexpected behavior
-	memset($hints, 0, sizeof hints);
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
+	memset(&help, 0, sizeof help);
+	help.ai_family = AF_INET;
+	help.ai_socktype = SOCK_STREAM;
 
 	// Get the host information
-	if ( (servercheck = getaddrinfo(server, port, &help, &serverinfo)) != 0 )
+	if ( (servercheck = getaddrinfo(server, port, &help, &serverinfo)) != 0)
 	{
 		fprintf(stderr, "tcpclient: ERROR!!! Call to getaddrinfo() failed!\n");
-		fpritnf(stderr, "errno: %s\n", gai_strerror(servercheck));
+		fprintf(stderr, "errno: %s\n", gai_strerror(servercheck));
 		exit(1);
 	}
 
@@ -70,14 +72,14 @@ int main(int argc, char *argv[])
 	for (p=serverinfo; p!=NULL; p=p->ai_next)
 	{
 		// Create a socket 
-		if ((sockfd = socket(p->ai_family, p->ai_socktype, 0) == -1)
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, 0)) < 0)
 		{
 			fprintf(stderr, "tcpclient: ERROR!!! Call to socket() failed!\n");
-			fprintf(stderr, "errno: %s\n", strerror(errno);
+			fprintf(stderr, "errno: %s\n", strerror(errno));
 			exit(1);
 		}
 		// Connect the socket to the host
-		if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
+		if (connect(sockfd, p->ai_addr, p->ai_addrlen) < 0)
 		{
 			close(sockfd);
 			fprintf(stderr, "tcpclient: ERROR!!! Call to connect() failed!\n");
@@ -98,17 +100,29 @@ int main(int argc, char *argv[])
 
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
 	printf("tcpclient: Connect to %s\n", s);
+	// Free this, no longer needed
+	freeaddrinfo(serverinfo);
 
-	freeaddrinfo(servinfo);
+	// Send the name of the requested file to the server
+	if (send(sockfd, req_file, strlen(req_file), 0) < 0)
+	{
+		fprintf(stderr, "tcpclient: ERROR!!! Call to send() failed!\n");
+		fprintf(stderr, "errno: %s\n", strerror(errno));
+	}
+	
+	memset(buf, 0, MAX_LINE);
 
-	if ((numbytes = recv(sockfd, buf, MAX_LINE-1, 0) < 0)
+	// Wait for the file contents to be sent back
+	if ((numbytes = recv(sockfd, buf, MAX_LINE-1, 0)) < 0)
 	{
 		fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
 		fprintf(stderr, "errno: %s\n", strerror(errno));
 		exit(1);
 	}
 
-	buf[numbytes] = "tcpclient: received '%s'\n", buf);
+	// TEMP FOR TESTING
+	
+	printf("tcpclient: received '%s'\n", buf);
 
 	close(sockfd);
 

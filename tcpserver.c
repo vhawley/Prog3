@@ -75,7 +75,6 @@ int main(int argc, char *argv[]) {
         
         //receive message
         len = recv(new_s, buf, sizeof(buf), 0);
-        printf("%d\n", len);
         if (len == -1) {
             fprintf(stderr, "error receiving message\n");
             exit(1);
@@ -83,7 +82,6 @@ int main(int argc, char *argv[]) {
         if (len == 0) {
             break;
         }
-        printf("TCP Server Received: %s\n", buf);
         
         FILE *f;
         char *message = malloc(sizeof(char));
@@ -102,11 +100,9 @@ int main(int argc, char *argv[]) {
             fseek(f, 0L, SEEK_SET);
             message = malloc(sizeof(char)*fileSize);
             int result = fread(message, 1, fileSize, f);
-            printf("%d %d\n", fileSize, result);
         }
         
         //send file contents back to client if it exists, empty message with length -1 otherwise
-        printf("%s %d\n", message, fileSize);
         if (send(new_s, message, fileSize, 0) < 0) {
             fprintf(stderr, "error sending message back to client\n");
             exit(1);

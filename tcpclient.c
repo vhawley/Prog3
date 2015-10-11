@@ -99,32 +99,61 @@ int main(int argc, char *argv[])
 	}
 
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
-	printf("tcpclient: Connect to %s\n", s);
+	printf("tcpclient: Connected to %s\n", s);
 	// Free this, no longer needed
 	freeaddrinfo(serverinfo);
+	
+	// Create and open the file to be copied locally
+	FILE *newfp = fopen("newfile.txt", "w+");
 
 	// Send the name of the requested file to the server
-	if (send(sockfd, req_file, strlen(req_file), 0) < 0)
+	if (send(sockfd, req_file, strlen(req_file)+1, 0) < 0)
 	{
 		fprintf(stderr, "tcpclient: ERROR!!! Call to send() failed!\n");
 		fprintf(stderr, "errno: %s\n", strerror(errno));
 	}
-	
+
+	// Prepare buffer to receive fresh new data
 	memset(buf, 0, MAX_LINE);
 
-	// Wait for the file contents to be sent back
-	if ((numbytes = recv(sockfd, buf, MAX_LINE-1, 0)) < 0)
+	// Receive the file size from the server
+	if ((numbytes = recv(sockfd, buf, MAX_LINE, 0)) < 0)
 	{
 		fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
 		fprintf(stderr, "errno: %s\n", strerror(errno));
 		exit(1);
 	}
+	printf("tcpclient: Incoming file size: %s\n", buf);
 
-	// TEMP FOR TESTING
-	
-	printf("tcpclient: received '%s'\n", buf);
+	// Prepare buffer to receive fresh new data
+	memset(buf, 0, MAX_LINE);
+
+	// Wait for the file contents to be sent back
+	while ((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
+	{
+		// Ensure there was no error receiving the data from the server
+		if (numbytes  < 0)
+		{
+			fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno));
+			exit(1);
+		}
+
+		// Write to the new file
+		if (fputs(buf, newfp) < 0)
+		{
+			fprintf(stderr, "tcpclient: ERROR!!! Call to fputs() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno));
+			exit(1);
+		}
+		// Clear the buffer for the next round
+		memset(buf, 0, MAX_LINE);
+	}
+	// Print confirmation message
+	printf("tcpclient: File '%s' received from %s\n", req_file, server);
 
 	close(sockfd);
 
 	return 0;
 }
+

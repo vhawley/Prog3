@@ -113,6 +113,7 @@ int main(int argc, char *argv[]) {
         fflush(stdout);
         bzero(buf, sizeof(buf));
         bzero(message, sizeof(message));
+        free(message);
     }
     
     return 0;

@@ -65,6 +65,24 @@ int main(int argc, char *argv[]) {
     printf("Welcome to TCP SERVER\n");
     
     while (1) {
+        new_s = accept(s, (struct sockaddr *)&sin, &len);
+        if (new_s < 0) {
+            fprintf(stderr, "error accepting message from client");
+            exit(1);
+        }
+        
+        while (1) {
+            len = recv(new_s, buf, sizeof(buf), 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving message");
+                exit(1);
+            }
+            if (len == 0) {
+                break;
+            }
+            printf("TCP Server Received: %s", buf);
+            close(new_s);
+        }
         fflush(stdout);
     }
 }

@@ -48,6 +48,8 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Port number must be in range [1-65536]");
 		exit(1);
 	}
+	// Record the length of the requested file name
+	int len_file = strlen(req_file);
 	
 	// Initialize variables for TCP connection
 	int sockfd, numbytes, servercheck;
@@ -91,7 +93,7 @@ int main(int argc, char *argv[])
 		break;
 	}
 
-	// Make sure the connection server info wasnt invalidated
+	// Make sure the server info wasnt invalidated
 	if (p == NULL)
 	{
 		fprintf(stderr, "tcpclient: Failed to connect to host\n");
@@ -102,6 +104,22 @@ int main(int argc, char *argv[])
 	printf("tcpclient: Connected to %s\n", s);
 	// Free this, no longer needed
 	freeaddrinfo(serverinfo);
+	
+	
+	/////////////// LET'S START SENDING STUFF!!!! =D ///////////////////////////
+	
+	
+	// First we must send the length of the file to the server
+	// Record the length of the file as a string
+	char len_file_str[100];
+	sprintf(len_file_str,"%d",len_file);
+
+	//  Send the length of the name of the requested file to the server
+	if (send(sockfd, len_file_str, strlen(len_file_str)+1, 0) < 0)
+	{
+		fprintf(stderr, "tcpclient: ERROR!!! Call to send() failed!\n");
+		fprintf(stderr, "errno: %s\n", strerror(errno));
+	}
 	
 	// Create and open the file to be copied locally
 	FILE *newfp = fopen("newfile.txt", "w+");
@@ -121,6 +139,12 @@ int main(int argc, char *argv[])
 	{
 		fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
 		fprintf(stderr, "errno: %s\n", strerror(errno));
+		exit(1);
+	}
+	// Check if it was a valid file
+	if (atoi(buf) == -1)
+	{
+		fprintf(stderr, "tcpclient: ERROR!!! File does not exist!\n");
 		exit(1);
 	}
 	printf("tcpclient: Incoming file size: %s\n", buf);

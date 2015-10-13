@@ -10,8 +10,25 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+
+#include <openssl/md5.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+
 #define MAX_LINE 4096
 #define MAX_PENDING 5
+
+// Print the MD5 sum as hex-digits.
+void print_md5_sum(unsigned char* md) {
+	int i;
+	char out[512];
+	for(i=0; i <MD5_DIGEST_LENGTH; i++) {
+		printf("%02x",md[i]);
+	}
+	
+	printf("\n");
+}
 
 int main(int argc, char *argv[]) {
     struct sockaddr_in sin;
@@ -19,7 +36,7 @@ int main(int argc, char *argv[]) {
     int len;
     int s, new_s;
     int port;
-    
+    unsigned char md5check[MD5_DIGEST_LENGTH];
     if (argc < 2) {
         fprintf(stderr, "error: must specify port to run server on\n");
         exit(1);
@@ -67,13 +84,16 @@ int main(int argc, char *argv[]) {
     //server loop
     while (1) {
         //accept message
-        new_s = accept(s, (struct sockaddr *)&sin, &len);
+        new_s = accept(s, (struct sockaddr *)&sin,(socklen_t *)&len);
         if (new_s < 0) {
             fprintf(stderr, "error accepting message from client\n");
             exit(1);
         }
         
-        //receive message
+		// Prepare buffer to receive fresh new data
+		memset(buf, 0, MAX_LINE);
+		
+        //receive filename lenght
         len = recv(new_s, buf, sizeof(buf), 0);
         if (len == -1) {
             fprintf(stderr, "error receiving message\n");
@@ -82,17 +102,39 @@ int main(int argc, char *argv[]) {
         if (len == 0) {
             break;
         }
+		uint16_t filename_len = ntohs(*(uint16_t*)buf);
+		printf("%d ok \n", filename_len);
+		// Prepare buffer to receive fresh new data
+		memset(buf, 0, MAX_LINE);
+		
+		//receive filename
+        len = recv(new_s, buf, sizeof(buf), 0);
+        if (len == -1) {
+            fprintf(stderr, "error receiving message\n");
+            exit(1);
+        }
+        if (len == 0) {
+            break;
+        }
+		
+		printf("%s \n", buf);
+		printf("%d ok \n", strlen(buf));
+		//Verify that the recieved filename has the same length as the lenght sent by the client
+		if( filename_len != strlen(buf)){
+			fprintf(stderr, "error filename lenght do not match\n");			
+		}
         
         FILE *f;
         char *message = malloc(sizeof(char));
         message[0] = 0;
-        int fileSize;
+        int fileSize = -1;
         
         //attempt to read file.
         f = fopen(buf, "r");
         if (f == NULL)
         {
             fileSize = -1;
+			printf("File does not exist\n");
         }
         else {
             fseek(f, 0L, SEEK_END);
@@ -101,7 +143,28 @@ int main(int argc, char *argv[]) {
             message = malloc(sizeof(char)*fileSize);
             int result = fread(message, 1, fileSize, f);
         }
-        
+		
+		uint32_t network_byte_order = htonl(fileSize);
+
+		//send file size
+        if (send(new_s, &network_byte_order,sizeof(uint32_t), 0) < 0) {
+            fprintf(stderr, "error sending file size back to client\n");
+            exit(1);
+        }
+		
+        //Calculate MD5
+		MD5((unsigned char*) message, fileSize, md5check);
+		munmap(message, fileSize); 
+		print_md5_sum(md5check);
+		
+		//send file contents back to client if it exists, empty message with length -1 otherwise
+        if (send(new_s, md5check,MD5_DIGEST_LENGTH, 0) < 0) {
+            fprintf(stderr, "error sending MD5 hash back to client\n");
+            exit(1);
+        }
+		
+		printf("%s",message);
+		
         //send file contents back to client if it exists, empty message with length -1 otherwise
         if (send(new_s, message, fileSize, 0) < 0) {
             fprintf(stderr, "error sending message back to client\n");

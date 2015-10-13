@@ -1,10 +1,7 @@
-all: tcpclient tcpserver
+all: tcpclient
 
 tcpclient: tcpclient.c
-	gcc tcpclient.c -Wall -o tcpclient -lssl -lcrypto
-
-tcpserver: tcpserver.c
-	gcc tcpserver.c -Wall -o tcpserver -lssl -lcrypto
+	gcc tcpclient.c -Wall -o tcpclient
 
 clean:
-	rm -f tcpclient tcpserver
+	rm -f tcpclient

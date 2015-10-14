@@ -20,13 +20,20 @@
 #define MAX_LINE 4096
 #define MAX_PENDING 5
 
+// Converts the MD5 sum as hex-digits string.
+void md5_to_string( char *out, unsigned char* md) {
+    int i;
+    for(i=0; i <MD5_DIGEST_LENGTH; i++) {
+        sprintf(&out[i*2],"%02x",md[i]);
+    }
+}
+
 int main(int argc, char *argv[]) {
     struct sockaddr_in sin;
     char *buf = malloc(sizeof(char) * MAX_LINE);
     int len;
     int s, new_s;
     int port;
-    unsigned char md5check[MD5_DIGEST_LENGTH];
     if (argc < 2) {
         fprintf(stderr, "error: must specify port to run server on\n");
         exit(1);
@@ -93,7 +100,6 @@ int main(int argc, char *argv[]) {
             break;
         }
 		uint16_t filename_len = ntohs(*(uint16_t*)buf);
-		printf("%d ok \n", filename_len);
 		// Prepare buffer to receive fresh new data
 		memset(buf, 0, MAX_LINE);
 		
@@ -109,7 +115,7 @@ int main(int argc, char *argv[]) {
 		
 		//Verify that the recieved filename has the same length as the lenght sent by the client
 		if( filename_len != strlen(buf)){
-			fprintf(stderr, "error filename lenght do not match\n");
+			fprintf(stderr, "error filename lengths do not match\n");
 			
 		}
         
@@ -142,16 +148,21 @@ int main(int argc, char *argv[]) {
         }
 		
         //Calculate MD5
+        unsigned char md5check[MD5_DIGEST_LENGTH];
+
 		MD5((unsigned char*) message, fileSize, md5check);
-		munmap(message, fileSize); 
-		
-		//send file MD% hash
+		munmap(message, fileSize);
+        
+        char md5string[MD5_DIGEST_LENGTH];
+        printf("%s\n", md5check);
+        md5_to_string(md5string, md5check);
+        printf("%s\n", md5check);
+		//send file MD5 hash
         if (send(new_s, md5check,MD5_DIGEST_LENGTH, 0) < 0) {
             fprintf(stderr, "error sending MD5 hash back to client\n");
             exit(1);
         }
 		
-		printf("%s",message);
 		
         //send file contents back to client if it exists, empty message with length -1 otherwise
         if (send(new_s, message, fileSize, 0) < 0) {
@@ -160,7 +171,6 @@ int main(int argc, char *argv[]) {
         }
         
         //clean stuff
-        close(new_s);
         fflush(stdout);
         bzero(buf, sizeof(buf));
         bzero(message, sizeof(message));

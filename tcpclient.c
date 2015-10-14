@@ -159,6 +159,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "errno: %s\n", strerror(errno));
         exit(1);
     }
+    else {
+    }
 	
     //Copy recieved buffer into the MD5 Server variable	 
     char md5server[MD5_DIGEST_LENGTH];
@@ -166,7 +168,7 @@ int main(int argc, char *argv[])
     memset(buf, 0, MAX_LINE);
 
     // Wait for the file contents to be sent back
-    while ((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
+    if ((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
     {
         // Ensure there was no error receiving the data from the server
         if (numbytes  < 0)
@@ -194,6 +196,7 @@ int main(int argc, char *argv[])
     message[0] = 0;
     int fileSize;
     
+
     //attempt to read file.
     fseek(newfp, 0L, SEEK_END);
     fileSize = ftell(newfp); // get size of file
@@ -201,20 +204,28 @@ int main(int argc, char *argv[])
     message = malloc(sizeof(char)*fileSize);
     fread(message, 1, fileSize, newfp);
     
+    printf("md5server: %s\n", md5server);
+
     // Calculate the MD5of the recieved file
     unsigned char md5client[MD5_DIGEST_LENGTH];
     char md5output[MD5_DIGEST_LENGTH];
     MD5((unsigned char*) message, fileSize, md5client);
-    munmap(message, fileSize); 
+    munmap(message, fileSize);
+    char md5servercopy[MD5_DIGEST_LENGTH];
+    strcpy(md5servercopy,md5server);
+    printf("md5servercopy: %s\nmd5server: %s\n", md5servercopy, md5server);
     md5_to_string(md5output,md5client);
-	
+    printf("md5servercopy: %s\nmd5server: %s\n", md5servercopy, md5server);
+    
     float transtime = 0;
     char output[512];
     if(memcmp(md5client,md5server,MD5_DIGEST_LENGTH) != 0)
     {
-        printf("File failed md5 hash check \n");
+        fprintf(stderr, "File failed md5 hash check.\nserver: %s\nclient:%s \n", md5server, md5client);
+        exit(1);
     }
-	
+    md5_to_string(md5output,md5client);
+
     sprintf(output," %d bytes transferred in %.3f seconds. Throughput: 4.740 Megabytes/sec. File MD5sum: %s",filesize_server,transtime,md5output);
     printf("%s \n",output);
     close(sockfd);

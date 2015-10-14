@@ -109,7 +109,6 @@ int main(int argc, char *argv[])
     }
     
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
-    printf("tcpclient: Connected to %s\n", s);
     // Free this, no longer needed
     freeaddrinfo(serverinfo);
     
@@ -127,7 +126,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "tcpclient: ERROR!!! First call to send() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
     }
-    printf("%s \n",req_file);
     // Send the name of the requested file to the server
     if (send(sockfd, req_file, strlen(req_file)+6, 0) < 0)
     {
@@ -138,7 +136,8 @@ int main(int argc, char *argv[])
     struct timeval begTimestamp;
     memset(&begTimestamp, 0, sizeof begTimestamp);
     gettimeofday(&begTimestamp, NULL);
-    int start_time = begTimestamp.tv_sec;
+    long int start_time = begTimestamp.tv_sec;
+    long int start_time_usec = begTimestamp.tv_usec;
     
     // Receive the file size from the server
     if ((numbytes = recv(sockfd, buf, sizeof(uint32_t), 0)) < 0)
@@ -148,7 +147,6 @@ int main(int argc, char *argv[])
         exit(1);
     }
     int filesize_server = ntohl(*(uint32_t*)buf);
-    printf("tcpclient: Incoming file size: %d\n", filesize_server);
 	
     // Prepare buffer to receive fresh new data
     memset(buf, 0, MAX_LINE);
@@ -203,9 +201,6 @@ int main(int argc, char *argv[])
         memset(buf, 0, MAX_LINE);
     }
 
-    // Print confirmation message
-    printf("tcpclient: File '%s' received from %s\n", req_file, server);
-    
     struct timeval endTimestamp;
     gettimeofday(&endTimestamp, NULL);
 
@@ -230,24 +225,21 @@ int main(int argc, char *argv[])
 	
     md5_to_string(md5output,md5client);
     
-
-    printf("%ld %ld\n %ld %ld\n", start_time, begTimestamp.tv_usec, endTimestamp.tv_sec, endTimestamp.tv_usec);
-    
-    long int timeDifInMicros = (endTimestamp.tv_sec - begTimestamp.tv_sec) * 1000000 + (endTimestamp.tv_usec - begTimestamp.tv_usec);
-    printf("timeDifInMicros: %ld\n", timeDifInMicros);
+    //calculate time difference
+    long int timeDifInMicros = (endTimestamp.tv_sec - start_time) * 1000000 + (endTimestamp.tv_usec - start_time_usec);
     double transtime = ((double)timeDifInMicros) / 1000000;
-    printf("transtime: %f\n", transtime);
-    double throughput = (filesize_server / 1000000) / transtime;
-    printf("throughput: %f\n", throughput);
+    double throughput = ((double)filesize_server / 1000000) / transtime;
 
     char output[512];
 	
+    //check md5
     if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
     {
         fprintf(stderr, "File failed md5 hash check.\nserver: %s\nclient:%s \n", md5server, md5output);
         exit(1);
     }
 	
+    //print results
     sprintf(output," %d bytes transferred in %.3f seconds. Throughput: %.3f Megabytes/sec. File MD5sum: %s",filesize_server,transtime, throughput, md5output);
     printf("%s \n",output);
     close(sockfd);

@@ -119,6 +119,8 @@ int main(int argc, char *argv[])
     uint16_t file_name_len = strlen(req_file);
     uint16_t network_byte_order = htons(file_name_len);;
     
+    
+
     // Send the lenght of the name of the requested file to the server
     if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
     {
@@ -132,6 +134,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "tcpclient: ERROR!!! Second call to send() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
     }
+    
+    struct timeval begTimestamp;
+    gettimeofday(&begTimestamp, NULL);
     
     // Receive the file size from the server
     if ((numbytes = recv(sockfd, buf, sizeof(uint32_t), 0)) < 0)
@@ -167,6 +172,9 @@ int main(int argc, char *argv[])
     strcpy(md5server, buf);
     memset(buf, 0, MAX_LINE);
 	int total = 0;
+    
+    
+    
     // Wait for the file contents to be sent back
    while((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
     {
@@ -192,8 +200,13 @@ int main(int argc, char *argv[])
         // Clear the buffer for the next round
         memset(buf, 0, MAX_LINE);
     }
+
     // Print confirmation message
     printf("tcpclient: File '%s' received from %s\n", req_file, server);
+    
+    struct timeval endTimestamp;
+    gettimeofday(&endTimestamp, NULL);
+
     
     char *message = malloc(sizeof(char));
     message[0] = 0;
@@ -214,8 +227,16 @@ int main(int argc, char *argv[])
     munmap(message, fileSize);
 	
     md5_to_string(md5output,md5client);
-		
-    float transtime = 0;
+    
+    printf("%ld %ld\n %ld %ld\n", begTimestamp.tv_sec, begTimestamp.tv_usec, endTimestamp.tv_sec, endTimestamp.tv_usec);
+    
+    long int timeDifInMicros = (endTimestamp.tv_sec - begTimestamp.tv_sec) * 1000000 + (endTimestamp.tv_usec - begTimestamp.tv_usec);
+    printf("timeDifInMicros: %ld\n", timeDifInMicros);
+    double transtime = ((double)timeDifInMicros) / 1000000;
+    printf("transtime: %f\n", transtime);
+    double throughput = (filesize_server / 1000000) / transtime;
+    printf("throughput: %f\n", throughput);
+
     char output[512];
 	
     if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
@@ -224,7 +245,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 	
-    sprintf(output," %d bytes transferred in %.3f seconds. Throughput: 4.740 Megabytes/sec. File MD5sum: %s",filesize_server,transtime,md5output);
+    sprintf(output," %d bytes transferred in %.3f seconds. Throughput: %.3f Megabytes/sec. File MD5sum: %s",filesize_server,transtime, throughput, md5output);
     printf("%s \n",output);
     close(sockfd);
 	fclose (newfp);

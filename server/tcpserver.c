@@ -136,7 +136,7 @@ int main(int argc, char *argv[]) {
             fileSize = ftell(f); // get size of file
             fseek(f, 0L, SEEK_SET);
             message = malloc(sizeof(char)*fileSize);
-            int result = fread(message, 1, fileSize, f);
+            fread(message, 1, fileSize, f);
         }
 		
 		uint32_t network_byte_order = htonl(fileSize);

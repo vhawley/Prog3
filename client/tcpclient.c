@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
     freeaddrinfo(serverinfo);
     
     // Create and open the file to be copied locally
-    FILE *newfp = fopen("newfile.txt", "w+");
+    FILE *newfp = fopen(req_file, "w+");
     
     uint16_t file_name_len = strlen(req_file);
     uint16_t network_byte_order = htons(file_name_len);;
@@ -235,12 +235,13 @@ int main(int argc, char *argv[])
     //check md5
     if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
     {
-        fprintf(stderr, "File failed md5 hash check.\nserver: %s\nclient:%s \n", md5server, md5output);
+        fprintf(stderr, "tcpclient: ERROR!!! File hashes do not match - bad transfer\n");
+
         exit(1);
     }
 	
     //print results
-    sprintf(output," %d bytes transferred in %.3f seconds. Throughput: %.3f Megabytes/sec. File MD5sum: %s",filesize_server,transtime, throughput, md5output);
+    sprintf(output,"Hash matches. %d bytes transferred in %.3f seconds. Throughput: %.3f Megabytes/sec. File MD5sum: %s",filesize_server,transtime, throughput, md5output);
     printf("%s \n",output);
     close(sockfd);
 	fclose (newfp);

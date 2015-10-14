@@ -136,7 +136,9 @@ int main(int argc, char *argv[])
     }
     
     struct timeval begTimestamp;
+    memset(&begTimestamp, 0, sizeof begTimestamp);
     gettimeofday(&begTimestamp, NULL);
+    int start_time = begTimestamp.tv_sec;
     
     // Receive the file size from the server
     if ((numbytes = recv(sockfd, buf, sizeof(uint32_t), 0)) < 0)
@@ -228,7 +230,8 @@ int main(int argc, char *argv[])
 	
     md5_to_string(md5output,md5client);
     
-    printf("%ld %ld\n %ld %ld\n", begTimestamp.tv_sec, begTimestamp.tv_usec, endTimestamp.tv_sec, endTimestamp.tv_usec);
+
+    printf("%ld %ld\n %ld %ld\n", start_time, begTimestamp.tv_usec, endTimestamp.tv_sec, endTimestamp.tv_usec);
     
     long int timeDifInMicros = (endTimestamp.tv_sec - begTimestamp.tv_sec) * 1000000 + (endTimestamp.tv_usec - begTimestamp.tv_usec);
     printf("timeDifInMicros: %ld\n", timeDifInMicros);

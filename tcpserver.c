@@ -137,6 +137,7 @@ int main(int argc, char *argv[]) {
             fseek(f, 0L, SEEK_SET);
             message = malloc(sizeof(char)*fileSize);
             int result = fread(message, 1, fileSize, f);
+			printf("%d",result);
         }
 		
 		uint32_t network_byte_order = htonl(fileSize);
@@ -153,23 +154,23 @@ int main(int argc, char *argv[]) {
 		MD5((unsigned char*) message, fileSize, md5check);
 		munmap(message, fileSize);
         
-        char md5string[MD5_DIGEST_LENGTH];
-        printf("%s\n", md5check);
-        md5_to_string(md5string, md5check);
-        printf("%s\n", md5check);
+        char md5string[2*MD5_DIGEST_LENGTH];
+        md5_to_string(md5string, &md5check);
+		
 		//send file MD5 hash
-        if (send(new_s, md5check,MD5_DIGEST_LENGTH, 0) < 0) {
+        if (send(new_s, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
             fprintf(stderr, "error sending MD5 hash back to client\n");
             exit(1);
         }
-		
+		memset(md5string, 0, 2*MD5_DIGEST_LENGTH);
 		
         //send file contents back to client if it exists, empty message with length -1 otherwise
-        if (send(new_s, message, fileSize, 0) < 0) {
+		int numbytes = 0;
+        if ((numbytes = send(new_s, message, fileSize, 0)) < 0) {
             fprintf(stderr, "error sending message back to client\n");
             exit(1);
         }
-        
+
         //clean stuff
         fflush(stdout);
         bzero(buf, sizeof(buf));

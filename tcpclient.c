@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
     }
     
    // Receive the md5 hash value
-    if ((numbytes = recv(sockfd, buf, MD5_DIGEST_LENGTH, 0)) < 0)
+    if ((numbytes = recv(sockfd, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
     {
         fprintf(stderr, "tcpclient: ERROR!!! Second call to recv() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
@@ -163,29 +163,32 @@ int main(int argc, char *argv[])
     }
 	
     //Copy recieved buffer into the MD5 Server variable	 
-    char md5server[MD5_DIGEST_LENGTH];
+    char md5server[2*MD5_DIGEST_LENGTH];
     strcpy(md5server, buf);
     memset(buf, 0, MAX_LINE);
-
+	int total = 0;
     // Wait for the file contents to be sent back
-    if ((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
+   while((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
     {
-        // Ensure there was no error receiving the data from the server
+        
+	   // Ensure there was no error receiving the data from the server
         if (numbytes  < 0)
         {
             fprintf(stderr, "tcpclient: ERROR!!! Third call to recv() failed!\n");
             fprintf(stderr, "errno: %s\n", strerror(errno));
             exit(1);
         }
-        
+        total += numbytes;
         // Write to the new file
-        if (fputs(buf, newfp) < 0)
+        if (fwrite(buf,1,numbytes, newfp) < 0)
         {
             fprintf(stderr, "tcpclient: ERROR!!! Call to fputs() failed!\n");
             fprintf(stderr, "errno: %s\n", strerror(errno));
             exit(1);
         }
-        
+        if(filesize_server <= total){
+			break;
+		}
         // Clear the buffer for the next round
         memset(buf, 0, MAX_LINE);
     }
@@ -202,33 +205,29 @@ int main(int argc, char *argv[])
     fileSize = ftell(newfp); // get size of file
     fseek(newfp, 0L, SEEK_SET);
     message = malloc(sizeof(char)*fileSize);
-    fread(message, 1, fileSize, newfp);
-    
-    printf("md5server: %s\n", md5server);
+    fread(message, 1, fileSize, newfp);  
 
     // Calculate the MD5of the recieved file
     unsigned char md5client[MD5_DIGEST_LENGTH];
-    char md5output[MD5_DIGEST_LENGTH];
+    char md5output[2*MD5_DIGEST_LENGTH];
     MD5((unsigned char*) message, fileSize, md5client);
     munmap(message, fileSize);
-    char md5servercopy[MD5_DIGEST_LENGTH];
-    strcpy(md5servercopy,md5server);
-    printf("md5servercopy: %s\nmd5server: %s\n", md5servercopy, md5server);
+	
     md5_to_string(md5output,md5client);
-    printf("md5servercopy: %s\nmd5server: %s\n", md5servercopy, md5server);
-    
+		
     float transtime = 0;
     char output[512];
-    if(memcmp(md5client,md5server,MD5_DIGEST_LENGTH) != 0)
+	
+    if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
     {
-        fprintf(stderr, "File failed md5 hash check.\nserver: %s\nclient:%s \n", md5server, md5client);
+        fprintf(stderr, "File failed md5 hash check.\nserver: %s\nclient:%s \n", md5server, md5output);
         exit(1);
     }
-    md5_to_string(md5output,md5client);
-
+	
     sprintf(output," %d bytes transferred in %.3f seconds. Throughput: 4.740 Megabytes/sec. File MD5sum: %s",filesize_server,transtime,md5output);
     printf("%s \n",output);
     close(sockfd);
+	fclose (newfp);
    
     return 0;
 }

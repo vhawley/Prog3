@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -18,17 +19,6 @@
 
 #define MAX_LINE 4096
 #define MAX_PENDING 5
-
-// Print the MD5 sum as hex-digits.
-void print_md5_sum(unsigned char* md) {
-	int i;
-	char out[512];
-	for(i=0; i <MD5_DIGEST_LENGTH; i++) {
-		printf("%02x",md[i]);
-	}
-	
-	printf("\n");
-}
 
 int main(int argc, char *argv[]) {
     struct sockaddr_in sin;
@@ -107,8 +97,8 @@ int main(int argc, char *argv[]) {
 		// Prepare buffer to receive fresh new data
 		memset(buf, 0, MAX_LINE);
 		
-		//receive filename
-        len = recv(new_s, buf, sizeof(buf), 0);
+		//receive filename which we now have the size of from the previous message
+        len = recv(new_s, buf, filename_len, 0);
         if (len == -1) {
             fprintf(stderr, "error receiving message\n");
             exit(1);
@@ -117,11 +107,10 @@ int main(int argc, char *argv[]) {
             break;
         }
 		
-		printf("%s \n", buf);
-		printf("%d ok \n", strlen(buf));
 		//Verify that the recieved filename has the same length as the lenght sent by the client
 		if( filename_len != strlen(buf)){
-			fprintf(stderr, "error filename lenght do not match\n");			
+			fprintf(stderr, "error filename lenght do not match\n");
+			
 		}
         
         FILE *f;
@@ -155,9 +144,8 @@ int main(int argc, char *argv[]) {
         //Calculate MD5
 		MD5((unsigned char*) message, fileSize, md5check);
 		munmap(message, fileSize); 
-		print_md5_sum(md5check);
 		
-		//send file contents back to client if it exists, empty message with length -1 otherwise
+		//send file MD% hash
         if (send(new_s, md5check,MD5_DIGEST_LENGTH, 0) < 0) {
             fprintf(stderr, "error sending MD5 hash back to client\n");
             exit(1);

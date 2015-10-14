@@ -122,21 +122,21 @@ int main(int argc, char *argv[])
     // Send the lenght of the name of the requested file to the server
     if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
     {
-        fprintf(stderr, "tcpclient: ERROR!!! Call to send() failed!\n");
+        fprintf(stderr, "tcpclient: ERROR!!! First call to send() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
     }
     printf("%s \n",req_file);
     // Send the name of the requested file to the server
     if (send(sockfd, req_file, strlen(req_file)+6, 0) < 0)
     {
-        fprintf(stderr, "tcpclient: ERROR!!! Call to send() failed!\n");
+        fprintf(stderr, "tcpclient: ERROR!!! Second call to send() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
     }
     
     // Receive the file size from the server
     if ((numbytes = recv(sockfd, buf, sizeof(uint32_t), 0)) < 0)
     {
-        fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
+        fprintf(stderr, "tcpclient: ERROR!!! First call to recv() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
         exit(1);
     }
@@ -146,20 +146,21 @@ int main(int argc, char *argv[])
     // Prepare buffer to receive fresh new data
     memset(buf, 0, MAX_LINE);
     
-    if(filesize_server < 0){
-        printf("File does not exists \n");
+    if(filesize_server < 0)
+    {
+        printf("tcpclient: ERROR!!! File does not exist!\n");
         exit(1);
     }
     
    // Receive the md5 hash value
     if ((numbytes = recv(sockfd, buf, MD5_DIGEST_LENGTH, 0)) < 0)
     {
-        fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
+        fprintf(stderr, "tcpclient: ERROR!!! Second call to recv() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
         exit(1);
     }
 	
-	//Copy recieved buffer into the MD5 Server variable	 
+    //Copy recieved buffer into the MD5 Server variable	 
     char md5server[MD5_DIGEST_LENGTH];
     strcpy(md5server, buf);
     memset(buf, 0, MAX_LINE);
@@ -170,7 +171,7 @@ int main(int argc, char *argv[])
         // Ensure there was no error receiving the data from the server
         if (numbytes  < 0)
         {
-            fprintf(stderr, "tcpclient: ERROR!!! Call to recv() failed!\n");
+            fprintf(stderr, "tcpclient: ERROR!!! Third call to recv() failed!\n");
             fprintf(stderr, "errno: %s\n", strerror(errno));
             exit(1);
         }
@@ -202,19 +203,20 @@ int main(int argc, char *argv[])
     
     // Calculate the MD5of the recieved file
     unsigned char md5client[MD5_DIGEST_LENGTH];
-	char md5output[MD5_DIGEST_LENGTH];
+    char md5output[MD5_DIGEST_LENGTH];
     MD5((unsigned char*) message, fileSize, md5client);
     munmap(message, fileSize); 
-	md5_to_string(md5output,md5client);
+    md5_to_string(md5output,md5client);
 	
     float transtime = 0;
     char output[512];
-    if(memcmp(md5client,md5server,MD5_DIGEST_LENGTH) != 0){
+    if(memcmp(md5client,md5server,MD5_DIGEST_LENGTH) != 0)
+    {
         printf("File failed md5 hash check \n");
     }
 	
-	sprintf(output," %d bytes transferred in %.3f seconds. Throughput: 4.740 Megabytes/sec. File MD5sum: %s",filesize_server,transtime,md5output);
-	printf("%s \n",output);
+    sprintf(output," %d bytes transferred in %.3f seconds. Throughput: 4.740 Megabytes/sec. File MD5sum: %s",filesize_server,transtime,md5output);
+    printf("%s \n",output);
     close(sockfd);
    
     return 0;

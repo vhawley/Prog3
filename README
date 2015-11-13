@@ -1,4 +1,0 @@
-The server directory contains tcpserver.c and a makefile for building it.
-The client directory contains tcpclient.c and a makefile for building it as
-well. The program3 directory contains the server directory, the client directory
-and this README file.

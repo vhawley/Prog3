@@ -1,7 +1,7 @@
-all: tcpclient
+all: myftp
 
-tcpclient: tcpclient.c
-	gcc tcpclient.c -Wall -o tcpclient -lssl -lcrypto
+myftp: myftp.c
+	gcc myftp.c -Wall -o myftp -lssl -lcrypto
 
 clean:
-	rm -f tcpclient
+	rm -f myftp

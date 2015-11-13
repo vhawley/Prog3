@@ -1,6 +1,6 @@
-all: tcpserver
+all: myftpd
 
-tcpserver: tcpserver.c
-	gcc -Wall tcpserver.c -o tcpserver -lssl -lcrypto
+myftpd: myftpd.c
+	gcc -Wall myftpd.c -o myftpd -lssl -lcrypto
 clean:
-	rm -f tcpserver
+	rm -f myftpd

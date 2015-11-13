@@ -41,20 +41,31 @@ void md5_to_string( char *out, unsigned char* md) {
 int main(int argc, char *argv[])
 {
     // Ensure proper usage ("./tcpclient <server> <port> <file>")
-    if (argc != 4)
+    if (argc < 4)
     {
-        fprintf(stderr, "tcpclient: ERROR!!! Incorrect tcpclient takes three arguments!\n");
-        fprintf(stderr, "usage: \"./tcpclient <server> <port> <file>\"\n");
+        fprintf(stderr, "myftp: ERROR!!! Incorrect myftp takes at least arguments!\n");
+        fprintf(stderr, "usage: \"myftp <server> <port> <file>\"\n");
         exit(1);
     }
     // Record the arguments in string objects
     char* server = argv[1];
     char* port = argv[2];
-    char* req_file = argv[3];
+    char* req_file = malloc(MAX_LINE*sizeof(char));
+    
+    strcpy(req_file, argv[3]);
+    
+    int i;
+    for (i = 4; i < argc; i++) {
+        strcat(req_file, " ");
+        strcat(req_file, argv[i]);
+    }
+    
+    printf("%s\n", req_file);
+    
     // Ensure that the port is actually a port number
     if (atoi(port) > 65536)
     {
-        fprintf(stderr, "tcpclient: ERROR!!! Invalid port number!\n");
+        fprintf(stderr, "myftp: ERROR!!! Invalid port number!\n");
         fprintf(stderr, "Port number must be in range [1-65536]");
         exit(1);
     }
@@ -73,7 +84,7 @@ int main(int argc, char *argv[])
     // Get the host information
     if ( (servercheck = getaddrinfo(server, port, &help, &serverinfo)) != 0)
     {
-        fprintf(stderr, "tcpclient: ERROR!!! Call to getaddrinfo() failed!\n");
+        fprintf(stderr, "myftp: ERROR!!! Call to getaddrinfo() failed!\n");
         fprintf(stderr, "errno: %s\n", gai_strerror(servercheck));
         exit(1);
     }

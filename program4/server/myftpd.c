@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
 		// Prepare buffer to receive fresh new data
 		memset(buf, 0, MAX_LINE);
 		
-        //receive filename lenght
+        //receive filename length
         len = recv(new_s, buf, sizeof(buf), 0);
         if (len == -1) {
             fprintf(stderr, "error receiving message\n");
@@ -112,12 +112,35 @@ int main(int argc, char *argv[]) {
         if (len == 0) {
             break;
         }
-		
+        
+        
 		//Verify that the recieved filename has the same length as the lenght sent by the client
 		if( filename_len != strlen(buf)){
 			fprintf(stderr, "error filename lengths do not match\n");
 			
 		}
+        
+        printf("%s\n", buf);
+        char *tok;
+        tok = strtok(buf," ");
+        char command[strlen(tok)];
+        strcpy(command, tok);
+        char arg[MAX_LINE];
+        memset(arg,0,MAX_LINE);
+        tok = strtok (NULL, " ");
+        
+        while (tok != NULL)
+        {
+            strcat(arg, tok);
+            strcat(arg, " ");
+            tok = strtok (NULL, " ");
+        }
+        
+        if (strlen(arg) != 0) {
+            arg[strlen(arg)-1] = 0;
+        }
+        
+        printf("command: %s\n arg: %s\n", command, arg);
         
         FILE *f;
         char *message = malloc(sizeof(char));

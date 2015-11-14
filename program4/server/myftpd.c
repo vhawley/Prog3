@@ -140,64 +140,81 @@ int main(int argc, char *argv[]) {
             arg[strlen(arg)-1] = 0;
         }
         
-        printf("command: %s\n arg: %s\n", command, arg);
+        if (!strcmp(command, "REQ")) {
+            
+        }
+        else if (!strcmp(command,"UPL")) {
+            
+        }
+        else if (!strcmp(command,"DEL")) {
+            
+        }
+        else if (!strcmp(command,"LIS")) {
+            
+        }
+        else if (!strcmp(command,"XIT")) {
+            
+        }
+        else { //old code for now
+            FILE *f;
+            char *message = malloc(sizeof(char));
+            message[0] = 0;
+            int fileSize = -1;
+            
+            //attempt to read file.
+            f = fopen(buf, "r");
+            if (f == NULL)
+            {
+                fileSize = -1;
+                printf("File does not exist\n");
+            }
+            else {
+                fseek(f, 0L, SEEK_END);
+                fileSize = ftell(f); // get size of file
+                fseek(f, 0L, SEEK_SET);
+                message = malloc(sizeof(char)*fileSize);
+                fread(message, 1, fileSize, f);
+            }
+            
+            uint32_t network_byte_order = htonl(fileSize);
+            
+            //send file size
+            if (send(new_s, &network_byte_order,sizeof(uint32_t), 0) < 0) {
+                fprintf(stderr, "error sending file size back to client\n");
+                exit(1);
+            }
+            
+            //Calculate MD5
+            unsigned char md5check[MD5_DIGEST_LENGTH];
+            
+            MD5((unsigned char*) message, fileSize, md5check);
+            munmap(message, fileSize);
+            
+            char md5string[2*MD5_DIGEST_LENGTH];
+            md5_to_string(md5string, &md5check);
+            
+            //send file MD5 hash
+            if (send(new_s, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
+                fprintf(stderr, "error sending MD5 hash back to client\n");
+                exit(1);
+            }
+            memset(md5string, 0, 2*MD5_DIGEST_LENGTH);
+            
+            //send file contents back to client if it exists, empty message with length -1 otherwise
+            int numbytes = 0;
+            if ((numbytes = send(new_s, message, fileSize, 0)) < 0) {
+                fprintf(stderr, "error sending message back to client\n");
+                exit(1);
+            }
+            
+            bzero(message, sizeof(message));
+            free(message);
+        }
         
-        FILE *f;
-        char *message = malloc(sizeof(char));
-        message[0] = 0;
-        int fileSize = -1;
-        
-        //attempt to read file.
-        f = fopen(buf, "r");
-        if (f == NULL)
-        {
-            fileSize = -1;
-			printf("File does not exist\n");
-        }
-        else {
-            fseek(f, 0L, SEEK_END);
-            fileSize = ftell(f); // get size of file
-            fseek(f, 0L, SEEK_SET);
-            message = malloc(sizeof(char)*fileSize);
-            fread(message, 1, fileSize, f);
-        }
-		
-		uint32_t network_byte_order = htonl(fileSize);
-
-		//send file size
-        if (send(new_s, &network_byte_order,sizeof(uint32_t), 0) < 0) {
-            fprintf(stderr, "error sending file size back to client\n");
-            exit(1);
-        }
-		
-        //Calculate MD5
-        unsigned char md5check[MD5_DIGEST_LENGTH];
-
-		MD5((unsigned char*) message, fileSize, md5check);
-		munmap(message, fileSize);
-        
-        char md5string[2*MD5_DIGEST_LENGTH];
-        md5_to_string(md5string, &md5check);
-		
-		//send file MD5 hash
-        if (send(new_s, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
-            fprintf(stderr, "error sending MD5 hash back to client\n");
-            exit(1);
-        }
-		memset(md5string, 0, 2*MD5_DIGEST_LENGTH);
-		
-        //send file contents back to client if it exists, empty message with length -1 otherwise
-		int numbytes = 0;
-        if ((numbytes = send(new_s, message, fileSize, 0)) < 0) {
-            fprintf(stderr, "error sending message back to client\n");
-            exit(1);
-        }
-
         //clean stuff
         fflush(stdout);
         bzero(buf, sizeof(buf));
-        bzero(message, sizeof(message));
-        free(message);
+
     }
     
     return 0;

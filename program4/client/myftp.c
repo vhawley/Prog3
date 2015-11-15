@@ -38,9 +38,8 @@ void md5_to_string( char *out, unsigned char* md) {
 
 /////////////////////////////  MAIN FUNCITON  //////////////////////////////////////////
 
-int main(int argc, char *argv[])
-{
-    // Ensure proper usage ("./tcpclient <server> <port> <file>")
+int main(int argc, char *argv[]) {
+    // Ensure proper usage ("./myftp <server> <port> <file>")
     if (argc < 3)
     {
         fprintf(stderr, "myftp: ERROR!!! Incorrect myftp takes at least 2 arguments!\n");
@@ -84,7 +83,7 @@ int main(int argc, char *argv[])
         // Create a socket
         if ((sockfd = socket(p->ai_family, p->ai_socktype, 0)) < 0)
         {
-            fprintf(stderr, "tcpclient: ERROR!!! Call to socket() failed!\n");
+            fprintf(stderr, "myftp: ERROR!!! Call to socket() failed!\n");
             fprintf(stderr, "errno: %s\n", strerror(errno));
             exit(1);
         }
@@ -92,7 +91,7 @@ int main(int argc, char *argv[])
         if (connect(sockfd, p->ai_addr, p->ai_addrlen) < 0)
         {
             close(sockfd);
-            fprintf(stderr, "tcpclient: ERROR!!! Call to connect() failed!\n");
+            fprintf(stderr, "myftp: ERROR!!! Call to connect() failed!\n");
             fprintf(stderr, "errno: %s\n", strerror(errno));
             exit(1);
         }
@@ -104,7 +103,7 @@ int main(int argc, char *argv[])
     // Make sure the connection server info wasnt invalidated
     if (p == NULL)
     {
-        fprintf(stderr, "tcpclient: Failed to connect to host\n");
+        fprintf(stderr, "myftp: Failed to connect to host\n");
         exit(1);
     }
     
@@ -118,26 +117,9 @@ int main(int argc, char *argv[])
     printf("Connection to %s:%s established.\n", server, port);
     
     while (1) {
-        char input[MAX_LINE];
-        scanf("%s", input);
-        char processedInput[MAX_LINE];
-        
-        strcpy(processedInput, input);
-        
-        char *tok;
-        tok = strtok(input," ");
-        char command[strlen(tok)];
-        strcpy(command, tok);
+        char command[MAX_LINE];
         char arg[MAX_LINE];
-        memset(arg,0,MAX_LINE);
-        tok = strtok (NULL, " ");
-        
-        while (tok != NULL)
-        {
-            strcat(arg, tok);
-            strcat(arg, " ");
-            tok = strtok (NULL, " ");
-        }
+        scanf("%s %s", command, arg);
         
         if (!strcmp(command, "REQ")) {
             if (strlen(arg) == 0) {
@@ -147,6 +129,34 @@ int main(int argc, char *argv[])
         else if (!strcmp(command,"UPL")) {
             if (strlen(arg) == 0) {
                 fprintf(stderr, "myftp: ERROR!!! UPL command requires a filename!\n");
+                continue;
+            }
+            
+            // Send the name of the operation to the server
+            printf("sending %s...\n", command);
+            if (send(sockfd, command, sizeof(command), 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+            
+            // Send the lenght of the name of the requested file to the server
+            uint16_t file_name_len = strlen(arg);
+            uint16_t network_byte_order = htons(file_name_len);
+            
+            
+            // Send the lenght of the name of the requested file to the server
+            if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+            
+            // Send the name of the requested file to the server
+            if (send(sockfd, arg, strlen(arg)+6, 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
             }
         }
         else if (!strcmp(command,"DEL")) {
@@ -155,148 +165,150 @@ int main(int argc, char *argv[])
             }
         }
         else if (!strcmp(command,"LIS")) {
+            
         }
         else if (!strcmp(command,"XIT")) {
+            
         }
         else {
             fprintf(stderr, "myftp: ERROR!!! unknown command!\n");
         }
         
-        printf("%s\n", input);
-        
-        // Create and open the file to be copied locally
-        FILE *newfp = fopen(input, "w+");
-        //REPLACE WITH FILENAME LATER
-
-        uint16_t file_name_len = strlen(input);
-        uint16_t network_byte_order = htons(file_name_len);
-        
-        // Send the lenght of the name of the requested file to the server
-        if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
-        {
-            fprintf(stderr, "tcpclient: ERROR!!! First call to send() failed!\n");
-            fprintf(stderr, "errno: %s\n", strerror(errno));
-        }
-        // Send the name of the requested file to the server
-        if (send(sockfd, input, strlen(input)+6, 0) < 0)
-        {
-            fprintf(stderr, "tcpclient: ERROR!!! Second call to send() failed!\n");
-            fprintf(stderr, "errno: %s\n", strerror(errno));
-        }
-        
-        struct timeval begTimestamp;
-        memset(&begTimestamp, 0, sizeof begTimestamp);
-        gettimeofday(&begTimestamp, NULL);
-        long int start_time = begTimestamp.tv_sec;
-        long int start_time_usec = begTimestamp.tv_usec;
-        
-        // Receive the file size from the server
-        if ((numbytes = recv(sockfd, buf, sizeof(uint32_t), 0)) < 0)
-        {
-            fprintf(stderr, "tcpclient: ERROR!!! First call to recv() failed!\n");
-            fprintf(stderr, "errno: %s\n", strerror(errno));
-            exit(1);
-        }
-        int filesize_server = ntohl(*(uint32_t*)buf);
-        
-        // Prepare buffer to receive fresh new data
-        memset(buf, 0, MAX_LINE);
-        
-        if(filesize_server < 0)
-        {
-            printf("tcpclient: ERROR!!! File does not exist!\n");
-            exit(1);
-        }
-        
-        // Receive the md5 hash value
-        if ((numbytes = recv(sockfd, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
-        {
-            fprintf(stderr, "tcpclient: ERROR!!! Second call to recv() failed!\n");
-            fprintf(stderr, "errno: %s\n", strerror(errno));
-            exit(1);
-        }
-        else {
-        }
-        
-        //Copy recieved buffer into the MD5 Server variable
-        char md5server[2*MD5_DIGEST_LENGTH];
-        strcpy(md5server, buf);
-        memset(buf, 0, MAX_LINE);
-        int total = 0;
-        
-        
-        
-        // Wait for the file contents to be sent back
-        while((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
-        {
-            
-            // Ensure there was no error receiving the data from the server
-            if (numbytes  < 0)
-            {
-                fprintf(stderr, "tcpclient: ERROR!!! Third call to recv() failed!\n");
-                fprintf(stderr, "errno: %s\n", strerror(errno));
-                exit(1);
-            }
-            total += numbytes;
-            // Write to the new file
-            if (fwrite(buf,1,numbytes, newfp) < 0)
-            {
-                fprintf(stderr, "tcpclient: ERROR!!! Call to fputs() failed!\n");
-                fprintf(stderr, "errno: %s\n", strerror(errno));
-                exit(1);
-            }
-            if(filesize_server <= total){
-                break;
-            }
-            // Clear the buffer for the next round
-            memset(buf, 0, MAX_LINE);
-        }
-        
-        struct timeval endTimestamp;
-        gettimeofday(&endTimestamp, NULL);
-        
-        
-        char *message = malloc(sizeof(char));
-        message[0] = 0;
-        int fileSize;
-        
-        
-        //attempt to read file.
-        fseek(newfp, 0L, SEEK_END);
-        fileSize = ftell(newfp); // get size of file
-        fseek(newfp, 0L, SEEK_SET);
-        message = malloc(sizeof(char)*fileSize);
-        fread(message, 1, fileSize, newfp);
-        
-        // Calculate the MD5of the recieved file
-        unsigned char md5client[MD5_DIGEST_LENGTH];
-        char md5output[2*MD5_DIGEST_LENGTH];
-        MD5((unsigned char*) message, fileSize, md5client);
-        munmap(message, fileSize);
-        
-        md5_to_string(md5output,md5client);
-        
-        //calculate time difference
-        long int timeDifInMicros = (endTimestamp.tv_sec - start_time) * 1000000 + (endTimestamp.tv_usec - start_time_usec);
-        double transtime = ((double)timeDifInMicros) / 1000000;
-        double throughput = ((double)filesize_server / 1000000) / transtime;
-        
-        char output[512];
-        
-        //check md5
-        if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
-        {
-            fprintf(stderr, "tcpclient: ERROR!!! File hashes do not match - bad transfer\n");
-            
-            exit(1);
-        }
-        
-        //print results
-        sprintf(output,"Hash matches. %d bytes transferred in %.3f seconds. Throughput: %.3f Megabytes/sec. File MD5sum: %s",filesize_server,transtime, throughput, md5output);
-        printf("%s \n",output);
-        close(sockfd);
-        fclose (newfp);
     }
     
     return 0;
 }
+
+
+//// Create and open the file to be copied locally
+//FILE *newfp = fopen(input, "w+");
+////REPLACE WITH FILENAME LATER
+//
+//uint16_t file_name_len = strlen(input);
+//uint16_t network_byte_order = htons(file_name_len);
+//
+//// Send the lenght of the name of the requested file to the server
+//if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
+//{
+//    fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
+//    fprintf(stderr, "errno: %s\n", strerror(errno));
+//}
+//// Send the name of the requested file to the server
+//if (send(sockfd, input, strlen(input)+6, 0) < 0)
+//{
+//    fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
+//    fprintf(stderr, "errno: %s\n", strerror(errno));
+//}
+//
+//struct timeval begTimestamp;
+//memset(&begTimestamp, 0, sizeof begTimestamp);
+//gettimeofday(&begTimestamp, NULL);
+//long int start_time = begTimestamp.tv_sec;
+//long int start_time_usec = begTimestamp.tv_usec;
+//
+//// Receive the file size from the server
+//if ((numbytes = recv(sockfd, buf, sizeof(uint32_t), 0)) < 0)
+//{
+//    fprintf(stderr, "myftp: ERROR!!! First call to recv() failed!\n");
+//    fprintf(stderr, "errno: %s\n", strerror(errno));
+//    exit(1);
+//}
+//int filesize_server = ntohl(*(uint32_t*)buf);
+//
+//// Prepare buffer to receive fresh new data
+//memset(buf, 0, MAX_LINE);
+//
+//if(filesize_server < 0)
+//{
+//    printf("myftp: ERROR!!! File does not exist!\n");
+//    exit(1);
+//}
+//
+//// Receive the md5 hash value
+//if ((numbytes = recv(sockfd, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
+//{
+//    fprintf(stderr, "myftp: ERROR!!! Second call to recv() failed!\n");
+//    fprintf(stderr, "errno: %s\n", strerror(errno));
+//    exit(1);
+//}
+//else {
+//}
+//
+////Copy recieved buffer into the MD5 Server variable
+//char md5server[2*MD5_DIGEST_LENGTH];
+//strcpy(md5server, buf);
+//memset(buf, 0, MAX_LINE);
+//int total = 0;
+//
+//
+//
+//// Wait for the file contents to be sent back
+//while((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
+//{
+//    
+//    // Ensure there was no error receiving the data from the server
+//    if (numbytes  < 0)
+//    {
+//        fprintf(stderr, "myftp: ERROR!!! Third call to recv() failed!\n");
+//        fprintf(stderr, "errno: %s\n", strerror(errno));
+//        exit(1);
+//    }
+//    total += numbytes;
+//    // Write to the new file
+//    if (fwrite(buf,1,numbytes, newfp) < 0)
+//    {
+//        fprintf(stderr, "myftp: ERROR!!! Call to fputs() failed!\n");
+//        fprintf(stderr, "errno: %s\n", strerror(errno));
+//        exit(1);
+//    }
+//    if(filesize_server <= total){
+//        break;
+//    }
+//    // Clear the buffer for the next round
+//    memset(buf, 0, MAX_LINE);
+//}
+//
+//struct timeval endTimestamp;
+//gettimeofday(&endTimestamp, NULL);
+//
+//
+//char *message = malloc(sizeof(char));
+//message[0] = 0;
+//int fileSize;
+//
+//
+////attempt to read file.
+//fseek(newfp, 0L, SEEK_END);
+//fileSize = ftell(newfp); // get size of file
+//fseek(newfp, 0L, SEEK_SET);
+//message = malloc(sizeof(char)*fileSize);
+//fread(message, 1, fileSize, newfp);
+//
+//// Calculate the MD5of the recieved file
+//unsigned char md5client[MD5_DIGEST_LENGTH];
+//char md5output[2*MD5_DIGEST_LENGTH];
+//MD5((unsigned char*) message, fileSize, md5client);
+//munmap(message, fileSize);
+//
+//md5_to_string(md5output,md5client);
+//
+////calculate time difference
+//long int timeDifInMicros = (endTimestamp.tv_sec - start_time) * 1000000 + (endTimestamp.tv_usec - start_time_usec);
+//double transtime = ((double)timeDifInMicros) / 1000000;
+//double throughput = ((double)filesize_server / 1000000) / transtime;
+//
+//char output[512];
+//
+////check md5
+//if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
+//{
+//    fprintf(stderr, "myftp: ERROR!!! File hashes do not match - bad transfer\n");
+//    
+//    exit(1);
+//}
+//
+////print results
+//sprintf(output,"Hash matches. %d bytes transferred in %.3f seconds. Throughput: %.3f Megabytes/sec. File MD5sum: %s",filesize_server,transtime, throughput, md5output);
+//printf("%s \n",output);
+//close(sockfd);
+//fclose (newfp);

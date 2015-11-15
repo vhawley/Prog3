@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
 		// Prepare buffer to receive fresh new data
 		memset(buf, 0, MAX_LINE);
 		
-        //receive filename length
+        //receive operation message
         len = recv(new_s, buf, sizeof(buf), 0);
         if (len == -1) {
             fprintf(stderr, "error receiving message\n");
@@ -99,116 +99,60 @@ int main(int argc, char *argv[]) {
         if (len == 0) {
             break;
         }
-		uint16_t filename_len = ntohs(*(uint16_t*)buf);
-		// Prepare buffer to receive fresh new data
-		memset(buf, 0, MAX_LINE);
-		
-		//receive filename which we now have the size of from the previous message
-        len = recv(new_s, buf, filename_len, 0);
-        if (len == -1) {
-            fprintf(stderr, "error receiving message\n");
-            exit(1);
-        }
-        if (len == 0) {
-            break;
-        }
         
+        printf("'%s'\n", buf);
+        char *operation = malloc(sizeof(char) * (strlen(buf)+1));
+        strcpy(operation, buf);
         
-		//Verify that the recieved filename has the same length as the lenght sent by the client
-		if( filename_len != strlen(buf)){
-			fprintf(stderr, "error filename lengths do not match\n");
-			
-		}
-        
-        printf("%s\n", buf);
-        char *tok;
-        tok = strtok(buf," ");
-        char command[strlen(tok)];
-        strcpy(command, tok);
-        char arg[MAX_LINE];
-        memset(arg,0,MAX_LINE);
-        tok = strtok (NULL, " ");
-        
-        while (tok != NULL)
-        {
-            strcat(arg, tok);
-            strcat(arg, " ");
-            tok = strtok (NULL, " ");
+        if (!strcmp(operation, "REQ")) {
+
         }
-        
-        if (strlen(arg) != 0) {
-            arg[strlen(arg)-1] = 0;
-        }
-        
-        if (!strcmp(command, "REQ")) {
+        else if (!strcmp(operation,"UPL")) {
+            /// Prepare buffer to receive fresh new data
+            memset(buf, 0, MAX_LINE);
             
-        }
-        else if (!strcmp(command,"UPL")) {
-            
-        }
-        else if (!strcmp(command,"DEL")) {
-            
-        }
-        else if (!strcmp(command,"LIS")) {
-            
-        }
-        else if (!strcmp(command,"XIT")) {
-            
-        }
-        else { //old code for now
-            FILE *f;
-            char *message = malloc(sizeof(char));
-            message[0] = 0;
-            int fileSize = -1;
-            
-            //attempt to read file.
-            f = fopen(buf, "r");
-            if (f == NULL)
-            {
-                fileSize = -1;
-                printf("File does not exist\n");
-            }
-            else {
-                fseek(f, 0L, SEEK_END);
-                fileSize = ftell(f); // get size of file
-                fseek(f, 0L, SEEK_SET);
-                message = malloc(sizeof(char)*fileSize);
-                fread(message, 1, fileSize, f);
-            }
-            
-            uint32_t network_byte_order = htonl(fileSize);
-            
-            //send file size
-            if (send(new_s, &network_byte_order,sizeof(uint32_t), 0) < 0) {
-                fprintf(stderr, "error sending file size back to client\n");
+            //receive filename lenght
+            len = recv(new_s, buf, sizeof(buf), 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving message\n");
                 exit(1);
             }
+            if (len == 0) {
+                break;
+            }
+
+            uint16_t filename_len = ntohs(*(uint16_t*)buf);
+            printf("'%s'\n", buf);
             
-            //Calculate MD5
-            unsigned char md5check[MD5_DIGEST_LENGTH];
+            // Prepare buffer to receive fresh new data
+            memset(buf, 0, MAX_LINE);
             
-            MD5((unsigned char*) message, fileSize, md5check);
-            munmap(message, fileSize);
-            
-            char md5string[2*MD5_DIGEST_LENGTH];
-            md5_to_string(md5string, &md5check);
-            
-            //send file MD5 hash
-            if (send(new_s, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
-                fprintf(stderr, "error sending MD5 hash back to client\n");
+            //receive filename which we now have the size of from the previous message
+            len = recv(new_s, buf, sizeof(buf), 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving message\n");
                 exit(1);
             }
-            memset(md5string, 0, 2*MD5_DIGEST_LENGTH);
-            
-            //send file contents back to client if it exists, empty message with length -1 otherwise
-            int numbytes = 0;
-            if ((numbytes = send(new_s, message, fileSize, 0)) < 0) {
-                fprintf(stderr, "error sending message back to client\n");
-                exit(1);
+            if (len == 0) {
+                printf("filename length == 0, breaking...\n");
+                break;
             }
             
-            bzero(message, sizeof(message));
-            free(message);
+            char *filename = malloc(sizeof(buf));
+            strcpy(filename, buf);
+            
+            printf("'%s' '%d' '%s'\n", operation, filename_len, filename);
+        }
+        else if (!strcmp(operation,"DEL")) {
+        }
+        else if (!strcmp(operation,"LIS")) {
+            
+        }
+        else if (!strcmp(operation,"XIT")) {
+            
+        }
+        else {
+            fprintf(stderr, "myftp: ERROR!!! unknown operation!\n");
         }
         
         //clean stuff
@@ -219,3 +163,79 @@ int main(int argc, char *argv[]) {
     
     return 0;
 }
+
+//
+//uint16_t filename_len = ntohs(*(uint16_t*)buf);
+//// Prepare buffer to receive fresh new data
+//memset(buf, 0, MAX_LINE);
+//
+////receive filename which we now have the size of from the previous message
+//len = recv(new_s, buf, filename_len, 0);
+//if (len == -1) {
+//    fprintf(stderr, "error receiving message\n");
+//    exit(1);
+//}
+//if (len == 0) {
+//    break;
+//}
+//
+//
+////Verify that the recieved filename has the same length as the lenght sent by the client
+//if( filename_len != strlen(buf)){
+//    fprintf(stderr, "error filename lengths do not match\n");
+//    
+//}
+//
+//FILE *f;
+//char *message = malloc(sizeof(char));
+//message[0] = 0;
+//int fileSize = -1;
+//
+////attempt to read file.
+//f = fopen(buf, "r");
+//if (f == NULL)
+//{
+//    fileSize = -1;
+//    printf("File does not exist\n");
+//}
+//else {
+//    fseek(f, 0L, SEEK_END);
+//    fileSize = ftell(f); // get size of file
+//    fseek(f, 0L, SEEK_SET);
+//    message = malloc(sizeof(char)*fileSize);
+//    fread(message, 1, fileSize, f);
+//}
+//
+//uint32_t network_byte_order = htonl(fileSize);
+//
+////send file size
+//if (send(new_s, &network_byte_order,sizeof(uint32_t), 0) < 0) {
+//    fprintf(stderr, "error sending file size back to client\n");
+//    exit(1);
+//}
+//
+////Calculate MD5
+//unsigned char md5check[MD5_DIGEST_LENGTH];
+//
+//MD5((unsigned char*) message, fileSize, md5check);
+//munmap(message, fileSize);
+//
+//char md5string[2*MD5_DIGEST_LENGTH];
+//md5_to_string(md5string, &md5check);
+//
+////send file MD5 hash
+//if (send(new_s, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
+//    fprintf(stderr, "error sending MD5 hash back to client\n");
+//    exit(1);
+//}
+//memset(md5string, 0, 2*MD5_DIGEST_LENGTH);
+//
+////send file contents back to client if it exists, empty message with length -1 otherwise
+//int numbytes = 0;
+//if ((numbytes = send(new_s, message, fileSize, 0)) < 0) {
+//    fprintf(stderr, "error sending message back to client\n");
+//    exit(1);
+//}
+//
+//bzero(message, sizeof(message));
+//free(message);

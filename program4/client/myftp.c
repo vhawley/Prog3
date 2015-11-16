@@ -118,62 +118,57 @@ int main(int argc, char *argv[]) {
     
     while (1) {
         char command[MAX_LINE];
+        memset(command, 0, MAX_LINE);
         char arg[MAX_LINE];
-        scanf("%s %s", command, arg);
+        memset(arg, 0, MAX_LINE);
+        scanf("%s", command);
+        
         
         if (!strcmp(command, "REQ")) {
-            if (strlen(arg) == 0) {
-                fprintf(stderr, "myftp: ERROR!!! REQ command requires a filename!\n");
-            }
+            
         }
         else if (!strcmp(command,"UPL")) {
-            if (strlen(arg) == 0) {
-                fprintf(stderr, "myftp: ERROR!!! UPL command requires a filename!\n");
-                continue;
-            }
-            
             // Send the name of the operation to the server
-            printf("sending %s...\n", command);
             if (send(sockfd, command, sizeof(command), 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
             
-            // Send the lenght of the name of the requested file to the server
+            
+            printf("Enter filename: ");
+            scanf("%s", arg);
+            
+            // Send the length of the name of the requested file to the server
             uint16_t file_name_len = strlen(arg);
             uint16_t network_byte_order = htons(file_name_len);
-            
             
             // Send the lenght of the name of the requested file to the server
             if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
             {
-                fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
+                fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
             
             // Send the name of the requested file to the server
-            if (send(sockfd, arg, strlen(arg)+6, 0) < 0)
+            if (send(sockfd, arg, sizeof(arg), 0) < 0)
             {
-                fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
+                fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
         }
         else if (!strcmp(command,"DEL")) {
-            if (strlen(arg) == 0) {
-                fprintf(stderr, "myftp: ERROR!!! DEL command requires a filename!\n");
-            }
+            
         }
         else if (!strcmp(command,"LIS")) {
             
         }
         else if (!strcmp(command,"XIT")) {
-            
+            close(sockfd);
         }
         else {
             fprintf(stderr, "myftp: ERROR!!! unknown command!\n");
         }
-        
     }
     
     return 0;

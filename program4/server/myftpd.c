@@ -111,7 +111,7 @@ int main(int argc, char *argv[]) {
             /// Prepare buffer to receive fresh new data
             memset(buf, 0, MAX_LINE);
             
-            //receive filename lenght
+            //receive filename length
             len = recv(new_s, buf, sizeof(buf), 0);
             if (len == -1) {
                 fprintf(stderr, "error receiving message\n");
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
             }
 
             uint16_t filename_len = ntohs(*(uint16_t*)buf);
-            printf("'%s'\n", buf);
+            printf("'%d'\n", len);
             
             // Prepare buffer to receive fresh new data
             memset(buf, 0, MAX_LINE);

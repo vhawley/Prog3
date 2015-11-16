@@ -80,14 +80,16 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     
+    //accept message
+    new_s = accept(s, (struct sockaddr *)&sin,(socklen_t *)&len);
+    if (new_s < 0) {
+        fprintf(stderr, "error accepting message from client\n");
+        exit(1);
+    }
+    
     //server loop
     while (1) {
-        //accept message
-        new_s = accept(s, (struct sockaddr *)&sin,(socklen_t *)&len);
-        if (new_s < 0) {
-            fprintf(stderr, "error accepting message from client\n");
-            exit(1);
-        }
+        
         
 		// Prepare buffer to receive fresh new data
 		memset(buf, 0, MAX_LINE);
@@ -209,7 +211,6 @@ int main(int argc, char *argv[]) {
             long int end_time = endTimestamp.tv_sec;
             long int end_time_usec = endTimestamp.tv_usec;
             
-            printf("0");
             // Receive the md5 hash value
             if ((numbytes = recv(new_s, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
             {
@@ -218,7 +219,11 @@ int main(int argc, char *argv[]) {
                 exit(1);
             }
             
-            printf("1");
+            char md5client[2*MD5_DIGEST_LENGTH];
+            memset(buf,0,2*MD5_DIGEST_LENGTH);
+            strcpy(md5client, buf);
+            printf("buf: %s\n", buf);
+            
             int fileSize;
             char *message = malloc(sizeof(char));
             message[0] = 0;
@@ -229,11 +234,8 @@ int main(int argc, char *argv[]) {
             fseek(newfp, 0L, SEEK_SET);
             message = malloc(sizeof(char)*fileSize);
             fread(message, 1, fileSize, newfp);
-            printf("2");
 
-            char md5client[2*MD5_DIGEST_LENGTH];
-            strcpy(md5client, buf);
-            printf("3");
+            
 
             // Calculate the MD5of the recieved file
             unsigned char md5server[MD5_DIGEST_LENGTH];
@@ -242,7 +244,6 @@ int main(int argc, char *argv[]) {
             munmap(message, fileSize);
             // Map the md5 value to a string
             md5_to_string(md5output,md5server);
-            printf("4");
 
             //calculate time difference
             long int timeDifInMicros = (end_time - start_time) * 1000000 + (end_time_usec - start_time_usec);
@@ -250,18 +251,19 @@ int main(int argc, char *argv[]) {
             double throughput = ((double)fileSize / 1000000) / transtime;
             
             char output[MAX_LINE];
-            printf("5");
             fflush(stdout);
+            
             //check md5
-//            if(memcmp(md5output,md5client,2*MD5_DIGEST_LENGTH) != 0)
-//            {
-//                fprintf(stderr, "myftp: ERROR!!! File hashes do not match - bad transfer\n");
-//                if (remove(filename))
-//                    fprintf(stderr, "myftp: Corrupt file removed.");
-//                else
-//                    fprintf(stderr, "myftp: Corrupt file could not be removed.");
-//            }
-            printf("6");
+            
+            printf("md5output: %s\nmd5client: %s", md5output, md5client);
+            if(strcmp(md5output,md5client) != 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! File hashes do not match - bad transfer\n");
+                if (remove(filename))
+                    fprintf(stderr, "myftp: Corrupt file removed.");
+                else
+                    fprintf(stderr, "myftp: Corrupt file could not be removed.");
+            }
 
             sprintf(output,"%d bytes transferred in %.3f seconds : %.3f Megabytes/sec.\nFile MD5sum: %s",fileSize,transtime, throughput, md5output);
             printf("%s \n",output);
@@ -284,8 +286,6 @@ int main(int argc, char *argv[]) {
         
         //clean stuff
         fflush(stdout);
-        bzero(buf, sizeof(buf));
-
     }
     
     return 0;

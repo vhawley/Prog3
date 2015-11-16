@@ -1,7 +1,7 @@
-//vhawley
-//tderanek
-//nmorales
-//13 October 2015
+//Thomas Deranek - tderanek
+//Victor Hawley - vhawley
+//Norman Morales - nmorales
+//17 November 2015
 
 #include <stdio.h>
 #include <unistd.h>
@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     // Record the arguments in string objects
     char* server = argv[1];
     char* port = argv[2];
-    char *buf = malloc(sizeof(char) * MAX_LINE);
+    
     // Ensure that the port is actually a port number
     if (atoi(port) > 65536)
     {
@@ -64,7 +64,8 @@ int main(int argc, char *argv[]) {
     }
     
     // Initialize variables for TCP connection
-    int sockfd, servercheck, numbytes;
+    int sockfd, numbytes, servercheck, len;
+    char buf[MAX_LINE];
     struct addrinfo help, *serverinfo, *p;
     char s[INET6_ADDRSTRLEN];
     
@@ -120,56 +121,92 @@ int main(int argc, char *argv[]) {
     
     printf("Connection to %s:%s established.\n", server, port);
     
-    while (1) 
+    while (1)
     {
-        char input[MAX_LINE];
-        char *command;
-    	char *arg;
-
-    	printf("Please enter a command (REQ, UPL, LIS, DEL, or XIT):\n");
-
-    	// This was changed to a single input using strtok so that invalid inputs
-    	// without a second arg don't have an awkward hang while it waits 
-    	// for the second input word
-    	scanf("%s", input);
-    	command = strtok(input, " ");
-    	arg = strtok(NULL, " ");
-           
+        printf("Please enter a command (REQ, UPL, LIS, DEL, or XIT): ");
+        
+        char command[MAX_LINE], input[MAX_LINE];
+        memset(command, 0, MAX_LINE);
+        
+        scanf("%s", command);
+        char *message;
+        
     	//
     	///////////////// REQ /////////////////////////////////
     	//
     	
-            if (!strcmp(command, "REQ")) 
-    	{
-    		printf("Please enter a file name:\n");
-    		memset(input, 0, sizeof(input));
-    		scanf("%s", input);
-            	char *filename = input;
+        if (!strcmp(command, "REQ")) 
+    	{	
+		int numbytes;
+		char buf[MAX_LINE];
     		
-    		request_file(filename, sockfd);
+		strcpy(buf, "REQ");
+		// Send the name of the request to the server
+		if (send(sockfd, "REQ", 4, 0) < 0)
+		{
+			fprintf(stderr, "myftp: ERROR!!! 1st call to send() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno));
+			exit(1);
+		}		
+		
+		// Wait for acknowledgement from server
+		if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) < 0)
+		{
+			fprintf(stderr, "myftp: ERROR!!! 1st call to recv() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno));
+			exit(1);
+		}
+		
+		printf("Please enter a file name: ");
+		memset(input, 0, sizeof(input));
+		scanf("%s", input);
+        	char *filename = input;
+		
+		request_file(filename, sockfd);
 
     	}
            
     	//
-    	///////////////// UPL /////////////////////////////////
-    	//
+        ///////////////// UPL /////////////////////////////////
+        //
+ 
+
         else if (!strcmp(command,"UPL")) {
             // Send the name of the operation to the server
-            if (send(sockfd, command, sizeof(command), 0) < 0)
+            if (send(sockfd, command, strlen(command) + 1, 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
+            char arg[MAX_LINE];
+            memset(arg, 0, MAX_LINE);
             
+            //read file to upload
+            FILE *f = NULL;
+            int fileSize;
+            while (f == NULL) {
+                printf("Enter filename: ");
+                scanf("%s", arg);
+                
+                f = fopen(arg, "r");
+                if (f == NULL)
+                {
+                    fileSize = -1;
+                    fprintf(stderr, "Could not open file: %s\n", arg);
+                }
+                else {
+                    fseek(f, 0L, SEEK_END);
+                    fileSize = ftell(f); // get size of file
+                    fseek(f, 0L, SEEK_SET);
+                    message = malloc(sizeof(char)*fileSize);
+                    fread(message, 1, fileSize, f);
+                }
+            }
             
-            printf("Enter filename: ");
-            scanf("%s", arg);
-            
-            // Send the length of the name of the requested file to the server
             uint16_t file_name_len = strlen(arg);
             uint16_t network_byte_order = htons(file_name_len);
             
-            // Send the lenght of the name of the requested file to the server
+            // Send the length of the name of the requested file to the server
             if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
@@ -177,101 +214,94 @@ int main(int argc, char *argv[]) {
             }
             
             // Send the name of the requested file to the server
-            if (send(sockfd, arg, sizeof(arg), 0) < 0)
+            if (send(sockfd, arg, strlen(arg)+1, 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
+            
+            //wait for ready signal
+            len = recv(sockfd, buf, sizeof(char)*6, 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving message\n");
+                exit(1);
+            }
+            if (len == 0) {
+                printf("ready message length == 0, breaking...\n");
+                break;
+            }
+            
+            uint32_t filesize_message = htonl(fileSize);
+            
+            //send file contents when ready
+            if (!strcmp(buf,"READY")) {
+                numbytes = 0;
+                if ((numbytes = send(sockfd, &filesize_message, sizeof(uint32_t), 0)) < 0) {
+                    fprintf(stderr, "error sending filesize to server\n");
+                    exit(1);
+                }
+                
+                if ((numbytes = send(sockfd, message, fileSize, 0)) < 0) {
+                    fprintf(stderr, "error sending file contents to server\n");
+                    exit(1);
+                }
+                
+                //Calculate MD5
+                unsigned char md5check[MD5_DIGEST_LENGTH];
+                
+                MD5((unsigned char*) message, fileSize, md5check);
+                munmap(message, fileSize);
+                
+                char md5string[2*MD5_DIGEST_LENGTH];
+                md5_to_string(md5string, &md5check);
+                //send file MD5 hash
+                if (send(sockfd, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
+                    fprintf(stderr, "error sending MD5 hash back to client\n");
+                    exit(1);
+                }
+                
+                // Prepare buffer to receive fresh new data
+                memset(buf, 0, MAX_LINE);
+                
+                //receive output message size
+                len = recv(sockfd, buf, sizeof(uint16_t), 0);
+                if (len == -1) {
+                    fprintf(stderr, "error receiving filename length message\n");
+                    exit(1);
+                }
+                if (len == 0) {
+                    break;
+                }
+                
+                uint16_t output_len = ntohs(*(uint16_t*)buf);
+                
+                // Prepare buffer to receive fresh new data
+                memset(buf, 0, MAX_LINE);
+                
+                //receive output message with size from previous message
+                len = recv(sockfd, buf, output_len+1, 0);
+                if (len == -1) {
+                    fprintf(stderr, "error receiving filename message\n");
+                    exit(1);
+                }
+                if (len == 0) {
+                    printf("output length == 0, breaking...\n");
+                    break;
+                }
+                
+                printf("%s\n", buf);
+            }
+            fclose(f);
+            
+            free(message);
         }
        
-	//
-	///////////////// DEL /////////////////////////////////
-	//
+    //
+    ///////////////// DEL /////////////////////////////////
+    //
 	
         else if (!strcmp(command,"DEL")) {
             
-            // Send the name of the operation to the server
-            if (send(sockfd, command, sizeof(command), 0) < 0)
-            {
-                fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
-                fprintf(stderr, "errno: %s\n", strerror(errno));
-            }
-                      
-            printf("Enter filename: ");
-            memset(input, 0, sizeof(input));
-            scanf("%s", input);
-            command = strtok(NULL, " ");
-    	    arg = strtok(input, " ");
-
-            // Send the length of the name of the requested file to the server
-            uint16_t file_name_len = strlen(arg);
-            uint16_t network_byte_order = htons(file_name_len);
-            // Send the lenght of the name of the requested file to the server
-            if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
-            {
-                fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
-                fprintf(stderr, "errno: %s\n", strerror(errno));
-            }
-            // Send the name of the requested file to the server
-            if (send(sockfd, arg, strlen(arg)+6, 0) < 0)
-            {
-                fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
-                fprintf(stderr, "errno: %s\n", strerror(errno));
-            }
-            
-            // Prepare buffer to receive fresh new data
-            memset(buf, 0, MAX_LINE);
-            // Checking if file was found
-            if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) < 0)
-            {
-                fprintf(stderr, "myftp: ERROR!!! call to recv() failed!\n");
-                fprintf(stderr, "errno: %s\n", strerror(errno));
-                exit(1);
-            }      
-            char *filesize_server = malloc(sizeof(buf));
-            strcpy(filesize_server, buf);
-
-            if( !strcmp(filesize_server,"-1")){
-                printf("The file does not exist on server.\n");
-            }
-            else{
-                int confirmation = 0;
-                while(!confirmation){
-                    printf("Do you want to delete the file(Yes/No): ");
-                    memset(input, 0, sizeof(input));
-                    scanf("%s", input);
-                    command = strtok(NULL, " ");
-                    arg = strtok(input, " ");
-                    if(!strcmp(arg,"No") || !strcmp(arg,"Yes")){
-                        confirmation = 1;   
-                    }
-                }
-                
-                // Send the confrimation from the user
-                if (send(sockfd, arg, sizeof(arg), 0) < 0)
-                {
-                    fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
-                    fprintf(stderr, "errno: %s\n", strerror(errno));
-                }
-                
-                
-                if(!strcmp(arg,"No")){
-                    printf("Delete abandoned by the user!\n");   
-                }else{
-                    
-                    if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) < 0)
-                    {
-                        fprintf(stderr, "myftp: ERROR!!! call to recv() failed!\n");
-                        fprintf(stderr, "errno: %s\n", strerror(errno));
-                        exit(1);
-                    }      
-                    char *deleted = malloc(sizeof(buf));
-                    strcpy(deleted, buf);
-                    if( !strcmp(deleted,"-1")){
-                        printf("Problems deleting the file at the server.\n");
-                    }
-                }
-            }
         }
        
 	//
@@ -279,34 +309,98 @@ int main(int argc, char *argv[]) {
 	//
 	
         else if (!strcmp(command,"LIS")) {
+             // Send the name of the operation to the server
+            if (send(sockfd, command, strlen(command) + 1, 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
             
+            //receive file size
+            len = recv(sockfd, buf, sizeof(uint32_t), 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving file size message\n");
+                exit(1);
+            }
+            if (len == 0) {
+                printf("fileSize == 0, breaking...\n");
+                break;
+
+            }
+
+            uint32_t direcSize = ntohl(*(uint32_t*)buf);
+            printf("%d\n",direcSize);
+            // Wait for the directory contents to be sent back
+            if(direcSize < MAX_LINE){
+                len = recv(sockfd, buf, direcSize, 0);
+                if (len == -1) {
+                    fprintf(stderr, "myftp: ERROR!!! Problem recieving directory listing\n");
+                    exit(1);
+                }
+                if (len == 0) {
+                    printf("myftp: ERROR!!! Did not get anything from the server\n");
+                    break;
+                } 
+            }else{
+                char listing[MAX_LINE];
+                int total = 0;
+                while((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
+                {
+
+                    // Ensure there was no error receiving the data from the server
+                    if (numbytes  < 0)
+                    {
+                        fprintf(stderr, "myftp: ERROR!!! recieving directory listing failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                        exit(1);
+                    }
+                    total += numbytes;
+                    // Write to the output buffer
+                    
+                    strcat(listing, buf);
+                    
+                    if(direcSize <= total)
+                    {
+                        break;
+                    }
+                    // Clear the buffer for the next round
+                    memset(buf, 0, MAX_LINE);
+                }
+            }
         }
        
 	//
 	///////////////// XIT /////////////////////////////////
 	//
 	
-        else if (!strcmp(command,"XIT")) {
-            close(sockfd);
+        else if (!strcmp(command,"XIT"))
+	{
+		if (send(sockfd, "XIT", 4, 0) < 0)
+		{
+			fprintf(stderr, "myftp: ERROR!!! 1st call to send() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno));
+			exit(1);
+		}		
+		close(sockfd);
+		break;
         }
-        else {
+        else 
+	{
             fprintf(stderr, "myftp: ERROR!!! unknown command!\n");
         }
     }
     
+    printf("Connection with server closed.\n");
     return 0;
 }
 
 void request_file(char *filename, int sockfd)
 {
-	// Create and open the file to be copied locally
-	FILE *newfp = fopen(filename, "w+");
+	uint16_t file_name_len = strlen(filename);
+	uint16_t file_size = htons(file_name_len);
 
-    uint16_t file_name_len = strlen(filename);
-	uint16_t network_byte_order = htons(file_name_len);
-
-	// Send the lenght of the name of the requested file to the server
-	if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
+	// Send the length of the name of the requested file to the server
+	if (send(sockfd, &file_size, sizeof(uint16_t), 0) < 0)
 	{
         fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
         fprintf(stderr, "errno: %s\n", strerror(errno));
@@ -340,94 +434,99 @@ void request_file(char *filename, int sockfd)
 
 	if(filesize_server < 0)
 	{
-		printf("myftp: ERROR!!! File does not exist!\n");
-		exit(1);
+		printf("myftpd: File does not exist!\n");
 	}
-
-	// Receive the md5 hash value
-	if ((numbytes = recv(sockfd, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
-	{
-		fprintf(stderr, "myftp: ERROR!!! 2nd call to recv() failed!\n");
-		fprintf(stderr, "errno: %s\n", strerror(errno));
-		exit(1);
-	}
-
-	//Copy recieved buffer into the MD5 Server variable
-	char md5server[2*MD5_DIGEST_LENGTH];
-	strcpy(md5server, buf);
-	memset(buf, 0, MAX_LINE);
-	int total = 0;
-
-	// Wait for the file contents to be sent back
-	while((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
-	{
-       
-		// Ensure there was no error receiving the data from the server
-		if (numbytes  < 0)
-		{
-			fprintf(stderr, "myftp: ERROR!!! 3rd call to recv() failed!\n");
-			fprintf(stderr, "errno: %s\n", strerror(errno));
-			exit(1);
-		}
-		total += numbytes;
-		// Write to the new file
-		if (fwrite(buf,1,numbytes, newfp) < 0)
-		{
-			fprintf(stderr, "myftp: ERROR!!! Call to fputs() failed!\n");
-			fprintf(stderr, "errno: %s\n", strerror(errno));
-			exit(1);
-		}
-		if(filesize_server <= total)
-		{
-			break;
-		}
-		// Clear the buffer for the next round
-		memset(buf, 0, MAX_LINE);
-	}
-
-	struct timeval endTimestamp;
-	gettimeofday(&endTimestamp, NULL);
-
-	char *message = malloc(sizeof(char));
-	message[0] = 0;
-	int fileSize;
-	//attempt to read file.
-	fseek(newfp, 0L, SEEK_END);
-	// get size of file
-	fileSize = ftell(newfp);
-	fseek(newfp, 0L, SEEK_SET);
-	message = malloc(sizeof(char)*fileSize);
-	fread(message, 1, fileSize, newfp);
-
-	// Close the file pointed to
-	fclose (newfp);
-
-	// Calculate the MD5of the recieved file
-	unsigned char md5client[MD5_DIGEST_LENGTH];
-	char md5output[2*MD5_DIGEST_LENGTH];
-	MD5((unsigned char*) message, fileSize, md5client);
-	munmap(message, fileSize);
-	// Map the md5 value to a string
-	md5_to_string(md5output,md5client);
-
-	//calculate time difference
-	long int timeDifInMicros = (endTimestamp.tv_sec - start_time) * 1000000 + (endTimestamp.tv_usec - start_time_usec);
-	double transtime = ((double)timeDifInMicros) / 1000000;
-	double throughput = ((double)filesize_server / 1000000) / transtime;
-
-	char output[512];
-
-	//check md5
-	if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
-	{
-	fprintf(stderr, "myftp: ERROR!!! File hashes do not match - bad transfer\n");   
-	if (remove(filename))
-		fprintf(stderr, "myftp: Corrupt file removed.");
 	else
-		fprintf(stderr, "myftp: Corrupt file could not be removed.");
-	}
+	{
+		// Create and open the file to be copied locally
+		FILE *newfp = fopen(filename, "w+");
 
-	//print results
-	sprintf(output,"%d bytes transferred in %.3f seconds : %.3f Megabytes/sec.\nFile MD5sum: %s",filesize_server,transtime, throughput, md5output);
-	printf("%s \n",output);
+		// Receive the md5 hash value
+		if ((numbytes = recv(sockfd, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
+		{
+			fprintf(stderr, "myftp: ERROR!!! 2nd call to recv() failed!\n");
+			fprintf(stderr, "errno: %s\n", strerror(errno));
+			exit(1);
+		}
+	
+		//Copy recieved buffer into the MD5 Server variable
+		char *md5server;
+		md5server = strdup(buf);
+		memset(buf, 0, MAX_LINE);
+		int total = 0;
+	
+		// Wait for the file contents to be sent back
+		while((numbytes = recv(sockfd, buf, MAX_LINE, 0)) > 0)
+		{
+	       
+			// Ensure there was no error receiving the data from the server
+			if (numbytes  < 0)
+			{
+				fprintf(stderr, "myftp: ERROR!!! 3rd call to recv() failed!\n");
+				fprintf(stderr, "errno: %s\n", strerror(errno));
+				exit(1);
+			}
+			total += numbytes;
+			// Write to the new file
+			if (fwrite(buf,1,numbytes, newfp) < 0)
+			{
+				fprintf(stderr, "myftp: ERROR!!! Call to fputs() failed!\n");
+				fprintf(stderr, "errno: %s\n", strerror(errno));
+				exit(1);
+			}
+			if(filesize_server <= total)
+			{
+				break;
+			}
+			// Clear the buffer for the next round
+			memset(buf, 0, MAX_LINE);
+		}
+	
+		struct timeval endTimestamp;
+		gettimeofday(&endTimestamp, NULL);
+	
+		char *message = malloc(sizeof(char));
+		message[0] = 0;
+		int fileSize;
+		//attempt to read file.
+		fseek(newfp, 0L, SEEK_END);
+		// get size of file
+		fileSize = ftell(newfp);
+		fseek(newfp, 0L, SEEK_SET);
+		message = malloc(sizeof(char)*fileSize);
+		fread(message, 1, fileSize, newfp);
+	
+		// Close the file pointed to
+		fclose (newfp);
+	
+		// Calculate the MD5of the recieved file
+		unsigned char md5client[MD5_DIGEST_LENGTH];
+		char md5output[2*MD5_DIGEST_LENGTH];
+		MD5((unsigned char*) message, fileSize, md5client);
+		munmap(message, fileSize);
+		// Map the md5 value to a string
+		md5_to_string(md5output,md5client);
+	
+		// Calculate time difference
+		long int timeDifInMicros = (endTimestamp.tv_sec - start_time) * 1000000 + (endTimestamp.tv_usec - start_time_usec);
+		double transtime = ((double)timeDifInMicros) / 1000000;
+		double throughput = ((double)filesize_server / 1000000) / transtime;
+	
+		char output[512];
+	
+		// Check md5
+		if(memcmp(md5output,md5server,MD5_DIGEST_LENGTH) != 0)
+		{
+			fprintf(stderr, "ERROR!!! File hashes do not match - bad transfer\n");   
+			if (remove(filename) == 0)
+				fprintf(stderr, "Corrupt file removed.\n");
+			else
+				fprintf(stderr, "Corrupt file couldn't be removed.\n");
+		}
+
+		// Print results
+		sprintf(output,"\n%d bytes transferred in %.3f seconds : %.3f Megabytes/sec.\nFile MD5sum: %s\n\n",filesize_server,transtime, throughput, md5output);
+		printf("%s",output);
+	}
 }
+

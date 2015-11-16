@@ -301,7 +301,87 @@ int main(int argc, char *argv[]) {
     //
 	
         else if (!strcmp(command,"DEL")) {
+            // Send the name of the operation to the server
+            if (send(sockfd, command, strlen(command) + 1, 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+                      
+            printf("Enter filename: ");
+            memset(input, 0, sizeof(input));
+		    scanf("%s", input);
+        	char *filename = input;
+            printf("%s\n",filename);
+            // Send the length of the name of the requested file to the server
+            uint16_t file_name_len = strlen(filename);
+            uint16_t network_byte_order = htons(file_name_len);
             
+            // Send the lenght of the name of the requested file to the server
+            if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+            // Send the name of the requested file to the server
+            if (send(sockfd, filename, strlen(filename)+6, 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+            
+            // Prepare buffer to receive fresh new data
+            memset(buf, 0, MAX_LINE);
+            // Checking if file was found
+            if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! call to recv() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+                exit(1);
+            }      
+            char *filesize_server = malloc(sizeof(buf));
+            strcpy(filesize_server, buf);
+
+            if( !strcmp(filesize_server,"-1")){
+                printf("The file does not exist on server.\n");
+            }
+            else{
+                int confirmation = 0;
+                while(!confirmation){
+                    printf("Do you want to delete the file(Yes/No): ");
+                    memset(input, 0, sizeof(input));
+		            scanf("%s", input);
+        	        filename = input;
+                    if(!strcmp(filename,"No") || !strcmp(filename,"Yes")){
+                        confirmation = 1;   
+                    }
+                }
+                
+                // Send the confrimation from the user
+                if (send(sockfd, filename, sizeof(filename), 0) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                }
+                
+                
+                if(!strcmp(filename,"No")){
+                    printf("Delete abandoned by the user!\n");   
+                }else{
+                    
+                    if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) < 0)
+                    {
+                        fprintf(stderr, "myftp: ERROR!!! call to recv() failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                        exit(1);
+                    }      
+                    char *deleted = malloc(sizeof(buf));
+                    strcpy(deleted, buf);
+                    if( !strcmp(deleted,"-1")){
+                        printf("Problems deleting the file at the server.\n");
+                    }
+                }
+            }   
         }
        
 	//
@@ -340,7 +420,8 @@ int main(int argc, char *argv[]) {
                 if (len == 0) {
                     printf("myftp: ERROR!!! Did not get anything from the server\n");
                     break;
-                } 
+                }
+                printf("%s\n",buf);
             }else{
                 char listing[MAX_LINE];
                 int total = 0;
@@ -366,6 +447,7 @@ int main(int argc, char *argv[]) {
                     // Clear the buffer for the next round
                     memset(buf, 0, MAX_LINE);
                 }
+                printf("%s\n",listing);
             }
         }
        

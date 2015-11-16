@@ -64,7 +64,6 @@ int main(int argc, char *argv[]) {
     }
     
     // Initialize variables for TCP connection
-    int sockfd, servercheck;
     int sockfd, numbytes, servercheck, len;
     char buf[MAX_LINE];
     struct addrinfo help, *serverinfo, *p;
@@ -147,9 +146,9 @@ int main(int argc, char *argv[]) {
     	///////////////// REQ /////////////////////////////////
     	//
     	
-            if (!strcmp(command, "REQ")) 
+        if (!strcmp(command, "REQ"))
     	{
-            char *input;
+            char input[MAX_LINE];
     		printf("Please enter a file name:\n");
     		memset(input, 0, sizeof(input));
     		scanf("%s", input);
@@ -223,7 +222,6 @@ int main(int argc, char *argv[]) {
             }
             
             uint32_t filesize_message = htonl(fileSize);
-            printf("%s\n", buf);
             
             if (!strcmp(buf,"READY")) {
                 numbytes = 0;
@@ -238,7 +236,20 @@ int main(int argc, char *argv[]) {
                     exit(1);
                 }
                 
+                //Calculate MD5
+                unsigned char md5check[MD5_DIGEST_LENGTH];
                 
+                MD5((unsigned char*) message, fileSize, md5check);
+                munmap(message, fileSize);
+                
+                char md5string[2*MD5_DIGEST_LENGTH];
+                md5_to_string(md5string, &md5check);
+                printf("%s\n", md5string);
+                //send file MD5 hash
+                if (send(sockfd, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
+                    fprintf(stderr, "error sending MD5 hash back to client\n");
+                    exit(1);
+                }
             }
             
             

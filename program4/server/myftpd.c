@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <errno.h>
@@ -168,10 +169,15 @@ int main(int argc, char *argv[]) {
                 
             }
             
-            uint32_t fileSize = ntohl(*(uint32_t*)buf);
-            printf("%d\n", fileSize);
+            uint32_t fileSizeClient = ntohl(*(uint32_t*)buf);
             int total = 0;
             int numbytes;
+            
+            struct timeval begTimestamp;
+            memset(&begTimestamp, 0, sizeof(begTimestamp));
+            gettimeofday(&begTimestamp, NULL);
+            long int start_time = begTimestamp.tv_sec;
+            long int start_time_usec = begTimestamp.tv_usec;
             
             while((numbytes = recv(new_s, buf, MAX_LINE, 0)) > 0) {
                 // Ensure there was no error receiving the data from the server
@@ -189,13 +195,77 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "errno: %s\n", strerror(errno));
                     exit(1);
                 }
-                if(fileSize <= total){
+                if(fileSizeClient <= total){
                     break;
                 }
                 // Clear the buffer for the next round
                 memset(buf, 0, MAX_LINE);
             }
+            
             printf("Upload complete\n");
+            
+            struct timeval endTimestamp;
+            gettimeofday(&endTimestamp, NULL);
+            long int end_time = endTimestamp.tv_sec;
+            long int end_time_usec = endTimestamp.tv_usec;
+            
+            printf("0");
+            // Receive the md5 hash value
+            if ((numbytes = recv(new_s, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! 2nd call to recv() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+                exit(1);
+            }
+            
+            printf("1");
+            int fileSize;
+            char *message = malloc(sizeof(char));
+            message[0] = 0;
+            //attempt to read file.
+            fseek(newfp, 0L, SEEK_END);
+            // get size of file
+            fileSize = ftell(newfp);
+            fseek(newfp, 0L, SEEK_SET);
+            message = malloc(sizeof(char)*fileSize);
+            fread(message, 1, fileSize, newfp);
+            printf("2");
+
+            char md5client[2*MD5_DIGEST_LENGTH];
+            strcpy(md5client, buf);
+            printf("3");
+
+            // Calculate the MD5of the recieved file
+            unsigned char md5server[MD5_DIGEST_LENGTH];
+            char md5output[2*MD5_DIGEST_LENGTH];
+            MD5((unsigned char*) message, fileSize, md5server);
+            munmap(message, fileSize);
+            // Map the md5 value to a string
+            md5_to_string(md5output,md5server);
+            printf("4");
+
+            //calculate time difference
+            long int timeDifInMicros = (end_time - start_time) * 1000000 + (end_time_usec - start_time_usec);
+            double transtime = ((double)timeDifInMicros) / 1000000;
+            double throughput = ((double)fileSize / 1000000) / transtime;
+            
+            char output[MAX_LINE];
+            printf("5");
+            fflush(stdout);
+            //check md5
+//            if(memcmp(md5output,md5client,2*MD5_DIGEST_LENGTH) != 0)
+//            {
+//                fprintf(stderr, "myftp: ERROR!!! File hashes do not match - bad transfer\n");
+//                if (remove(filename))
+//                    fprintf(stderr, "myftp: Corrupt file removed.");
+//                else
+//                    fprintf(stderr, "myftp: Corrupt file could not be removed.");
+//            }
+            printf("6");
+
+            sprintf(output,"%d bytes transferred in %.3f seconds : %.3f Megabytes/sec.\nFile MD5sum: %s",fileSize,transtime, throughput, md5output);
+            printf("%s \n",output);
+            fflush(stdout);
             fclose(newfp);
             
             

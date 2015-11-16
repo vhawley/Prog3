@@ -65,6 +65,8 @@ int main(int argc, char *argv[]) {
     
     // Initialize variables for TCP connection
     int sockfd, servercheck;
+    int sockfd, numbytes, servercheck, len;
+    char buf[MAX_LINE];
     struct addrinfo help, *serverinfo, *p;
     char s[INET6_ADDRSTRLEN];
     
@@ -120,28 +122,34 @@ int main(int argc, char *argv[]) {
     
     printf("Connection to %s:%s established.\n", server, port);
     
-    while (1) 
+    while (1)
     {
-        char input[MAX_LINE];
-        char *command;
-    	char *arg;
+        printf("Please enter a command (REQ, UPL, LIS, DEL, or XIT):\n");
+        
+        char command[MAX_LINE];
+        memset(command, 0, MAX_LINE);
+        
+        scanf("%s", command);
+        char *message;
+        
 
-    	printf("Please enter a command (REQ, UPL, LIS, DEL, or XIT):\n");
+    	
 
     	// This was changed to a single input using strtok so that invalid inputs
     	// without a second arg don't have an awkward hang while it waits 
     	// for the second input word
-    	scanf("%s", input);
-
-    	command = strtok(input, " ");
-    	arg = strtok(NULL, " ");
-           
+//    	scanf("%s", input);
+//
+//    	command = strtok(input, " ");
+//    	arg = strtok(NULL, " ");
+        
     	//
     	///////////////// REQ /////////////////////////////////
     	//
     	
             if (!strcmp(command, "REQ")) 
     	{
+            char *input;
     		printf("Please enter a file name:\n");
     		memset(input, 0, sizeof(input));
     		scanf("%s", input);
@@ -154,19 +162,39 @@ int main(int argc, char *argv[]) {
     	//
     	///////////////// UPL /////////////////////////////////
     	//
+ 
+
         else if (!strcmp(command,"UPL")) {
             // Send the name of the operation to the server
-            if (send(sockfd, command, sizeof(command), 0) < 0)
+            if (send(sockfd, command, strlen(command) + 1, 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
+            char arg[MAX_LINE];
+            memset(arg, 0, MAX_LINE);
             
+            FILE *f;
+            int fileSize;
+            while (f == NULL) {
+                printf("Enter filename: ");
+                scanf("%s", arg);
+                
+                f = fopen(arg, "r");
+                if (f == NULL)
+                {
+                    fileSize = -1;
+                    fprintf(stderr, "Could not open file: %s\n", arg);
+                }
+                else {
+                    fseek(f, 0L, SEEK_END);
+                    fileSize = ftell(f); // get size of file
+                    fseek(f, 0L, SEEK_SET);
+                    message = malloc(sizeof(char)*fileSize);
+                    fread(message, 1, fileSize, f);
+                }
+            }
             
-            printf("Enter filename: ");
-            scanf("%s", arg);
-            
-            // Send the length of the name of the requested file to the server
             uint16_t file_name_len = strlen(arg);
             uint16_t network_byte_order = htons(file_name_len);
             
@@ -178,11 +206,43 @@ int main(int argc, char *argv[]) {
             }
             
             // Send the name of the requested file to the server
-            if (send(sockfd, arg, sizeof(arg), 0) < 0)
+            if (send(sockfd, arg, strlen(arg)+1, 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
+            
+            len = recv(sockfd, buf, sizeof(char)*6, 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving message\n");
+                exit(1);
+            }
+            if (len == 0) {
+                printf("ready message length == 0, breaking...\n");
+                break;
+            }
+            
+            uint32_t filesize_message = htonl(fileSize);
+            printf("%s\n", buf);
+            
+            if (!strcmp(buf,"READY")) {
+                numbytes = 0;
+                printf("%d\n", fileSize);
+                if ((numbytes = send(sockfd, &filesize_message, sizeof(uint32_t), 0)) < 0) {
+                    fprintf(stderr, "error sending filesize to server\n");
+                    exit(1);
+                }
+                
+                if ((numbytes = send(sockfd, message, fileSize, 0)) < 0) {
+                    fprintf(stderr, "error sending file contents to server\n");
+                    exit(1);
+                }
+                
+                
+            }
+            
+            
+            free(message);
         }
        
 	//
@@ -212,7 +272,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "myftp: ERROR!!! unknown command!\n");
         }
     }
-    
+    close(sockfd);
     return 0;
 }
 

@@ -11,6 +11,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <errno.h>
 
 #include <openssl/md5.h>
 #include <sys/stat.h>
@@ -91,7 +92,7 @@ int main(int argc, char *argv[]) {
 		memset(buf, 0, MAX_LINE);
 		
         //receive operation message
-        len = recv(new_s, buf, sizeof(buf), 0);
+        len = recv(new_s, buf, sizeof(char)*4, 0);
         if (len == -1) {
             fprintf(stderr, "error receiving message\n");
             exit(1);
@@ -112,9 +113,9 @@ int main(int argc, char *argv[]) {
             memset(buf, 0, MAX_LINE);
             
             //receive filename length
-            len = recv(new_s, buf, sizeof(buf), 0);
+            len = recv(new_s, buf, sizeof(uint16_t), 0);
             if (len == -1) {
-                fprintf(stderr, "error receiving message\n");
+                fprintf(stderr, "error receiving filename length message\n");
                 exit(1);
             }
             if (len == 0) {
@@ -122,15 +123,15 @@ int main(int argc, char *argv[]) {
             }
 
             uint16_t filename_len = ntohs(*(uint16_t*)buf);
-            printf("'%d'\n", len);
+            printf("'%d'\n", filename_len);
             
             // Prepare buffer to receive fresh new data
             memset(buf, 0, MAX_LINE);
             
             //receive filename which we now have the size of from the previous message
-            len = recv(new_s, buf, sizeof(buf), 0);
+            len = recv(new_s, buf, filename_len+1, 0);
             if (len == -1) {
-                fprintf(stderr, "error receiving message\n");
+                fprintf(stderr, "error receiving filename message\n");
                 exit(1);
             }
             if (len == 0) {
@@ -141,7 +142,63 @@ int main(int argc, char *argv[]) {
             char *filename = malloc(sizeof(buf));
             strcpy(filename, buf);
             
-            printf("'%s' '%d' '%s'\n", operation, filename_len, filename);
+            FILE *newfp = fopen(filename, "w+");
+            
+            printf("%s %d %s\n", operation, filename_len, filename);
+            
+            if (send(new_s, "READY", sizeof(char)*6, 0) < 0)
+            {
+                fprintf(stderr, "myftpd: ERROR!!! Call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+            
+            // Prepare buffer to receive fresh new data
+            memset(buf, 0, MAX_LINE);
+            
+            
+            //receive file size
+            len = recv(new_s, buf, sizeof(uint32_t), 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving file size message\n");
+                exit(1);
+            }
+            if (len == 0) {
+                printf("fileSize == 0, breaking...\n");
+                break;
+                
+            }
+            
+            uint32_t fileSize = ntohl(*(uint32_t*)buf);
+            printf("%d\n", fileSize);
+            int total = 0;
+            int numbytes;
+            
+            while((numbytes = recv(new_s, buf, MAX_LINE, 0)) > 0) {
+                // Ensure there was no error receiving the data from the server
+                if (numbytes  < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Third call to recv() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                    exit(1);
+                }
+                total += numbytes;
+                // Write to the new file
+                if (fwrite(buf,1,numbytes, newfp) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Call to fputs() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                    exit(1);
+                }
+                if(fileSize <= total){
+                    break;
+                }
+                // Clear the buffer for the next round
+                memset(buf, 0, MAX_LINE);
+            }
+            printf("Upload complete\n");
+            fclose(newfp);
+            
+            
         }
         else if (!strcmp(operation,"DEL")) {
         }

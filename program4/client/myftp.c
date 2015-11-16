@@ -1,7 +1,7 @@
-//vhawley
-//tderanek
-//nmorales
-//13 October 2015
+//Thomas Deranek - tderanek
+//Victor Hawley - vhawley
+//Norman Morales - nmorales
+//17 November 2015
 
 #include <stdio.h>
 #include <unistd.h>
@@ -181,6 +181,7 @@ int main(int argc, char *argv[]) {
             char arg[MAX_LINE];
             memset(arg, 0, MAX_LINE);
             
+            //read file to upload
             FILE *f = NULL;
             int fileSize;
             while (f == NULL) {
@@ -205,7 +206,7 @@ int main(int argc, char *argv[]) {
             uint16_t file_name_len = strlen(arg);
             uint16_t network_byte_order = htons(file_name_len);
             
-            // Send the lenght of the name of the requested file to the server
+            // Send the length of the name of the requested file to the server
             if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
@@ -219,6 +220,7 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
             
+            //wait for ready signal
             len = recv(sockfd, buf, sizeof(char)*6, 0);
             if (len == -1) {
                 fprintf(stderr, "error receiving message\n");
@@ -231,6 +233,7 @@ int main(int argc, char *argv[]) {
             
             uint32_t filesize_message = htonl(fileSize);
             
+            //send file contents when ready
             if (!strcmp(buf,"READY")) {
                 numbytes = 0;
                 if ((numbytes = send(sockfd, &filesize_message, sizeof(uint32_t), 0)) < 0) {
@@ -260,6 +263,7 @@ int main(int argc, char *argv[]) {
                 // Prepare buffer to receive fresh new data
                 memset(buf, 0, MAX_LINE);
                 
+                //receive output message size
                 len = recv(sockfd, buf, sizeof(uint16_t), 0);
                 if (len == -1) {
                     fprintf(stderr, "error receiving filename length message\n");
@@ -274,7 +278,7 @@ int main(int argc, char *argv[]) {
                 // Prepare buffer to receive fresh new data
                 memset(buf, 0, MAX_LINE);
                 
-                //receive filename which we now have the size of from the previous message
+                //receive output message with size from previous message
                 len = recv(sockfd, buf, output_len+1, 0);
                 if (len == -1) {
                     fprintf(stderr, "error receiving filename message\n");

@@ -1,7 +1,7 @@
-//vhawley
-//tderanek
-//nmorales
-//13 October 2015
+//Thomas Deranek - tderanek
+//Victor Hawley - vhawley
+//Norman Morales - nmorales
+//17 November 2015
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -168,6 +168,7 @@ int main(int argc, char *argv[]) {
                 
                 FILE *newfp = fopen(filename, "w+");
                 
+                //send ready message
                 if (send(new_s, "READY", sizeof(char)*6, 0) < 0)
                 {
                     fprintf(stderr, "myftpd: ERROR!!! Call to send() failed!\n");
@@ -193,13 +194,14 @@ int main(int argc, char *argv[]) {
                 uint32_t fileSizeClient = ntohl(*(uint32_t*)buf);
                 int total = 0;
                 int numbytes;
-                
+                //begin timing
                 struct timeval begTimestamp;
                 memset(&begTimestamp, 0, sizeof(begTimestamp));
                 gettimeofday(&begTimestamp, NULL);
                 long int start_time = begTimestamp.tv_sec;
                 long int start_time_usec = begTimestamp.tv_usec;
                 
+                //receive file contents
                 while((numbytes = recv(new_s, buf, MAX_LINE, 0)) > 0) {
                     // Ensure there was no error receiving the data from the server
                     if (numbytes  < 0)
@@ -229,6 +231,7 @@ int main(int argc, char *argv[]) {
                 long int end_time_usec = endTimestamp.tv_usec;
                 
                 memset(buf, 0, MAX_LINE);
+                
                 // Receive the md5 hash value
                 if ((numbytes = recv(new_s, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
                 {
@@ -294,7 +297,7 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "errno: %s\n", strerror(errno));
                 }
                 
-                // Send the name of the requested file to the server
+                // Send the result of the transfer to the server
                 if (send(new_s, output, strlen(output) + 1, 0) < 0)
                 {
                     fprintf(stderr, "myftp: ERROR!!! Call to send() failed!\n");

@@ -233,7 +233,6 @@ int main(int argc, char *argv[]) {
             
             if (!strcmp(buf,"READY")) {
                 numbytes = 0;
-                printf("%d\n", fileSize);
                 if ((numbytes = send(sockfd, &filesize_message, sizeof(uint32_t), 0)) < 0) {
                     fprintf(stderr, "error sending filesize to server\n");
                     exit(1);
@@ -252,12 +251,41 @@ int main(int argc, char *argv[]) {
                 
                 char md5string[2*MD5_DIGEST_LENGTH];
                 md5_to_string(md5string, &md5check);
-                printf("%s\n", md5string);
                 //send file MD5 hash
                 if (send(sockfd, md5string,2*MD5_DIGEST_LENGTH, 0) < 0) {
                     fprintf(stderr, "error sending MD5 hash back to client\n");
                     exit(1);
                 }
+                
+                // Prepare buffer to receive fresh new data
+                memset(buf, 0, MAX_LINE);
+                
+                len = recv(sockfd, buf, sizeof(uint16_t), 0);
+                if (len == -1) {
+                    fprintf(stderr, "error receiving filename length message\n");
+                    exit(1);
+                }
+                if (len == 0) {
+                    break;
+                }
+                
+                uint16_t output_len = ntohs(*(uint16_t*)buf);
+                
+                // Prepare buffer to receive fresh new data
+                memset(buf, 0, MAX_LINE);
+                
+                //receive filename which we now have the size of from the previous message
+                len = recv(sockfd, buf, output_len+1, 0);
+                if (len == -1) {
+                    fprintf(stderr, "error receiving filename message\n");
+                    exit(1);
+                }
+                if (len == 0) {
+                    printf("output length == 0, breaking...\n");
+                    break;
+                }
+                
+                printf("%s\n", buf);
             }
             
             

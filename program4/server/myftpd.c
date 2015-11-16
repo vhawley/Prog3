@@ -11,6 +11,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <errno.h>
+#include <sys/time.h>
 
 #include <openssl/md5.h>
 #include <sys/stat.h>
@@ -98,38 +100,38 @@ int main(int argc, char *argv[]) {
 	memset(buf, 0, MAX_LINE);
 
 	printf("Client connection established.\n");
-	
-	while (1)
+        
+        while (1)
         {
+            memset(buf,0,MAX_LINE);
             //receive operation message
             len = recv(new_s, buf, sizeof(buf), 0);
             if (len == -1) {
                 fprintf(stderr, "error receiving message\n");
                 exit(1);
             }
-	    else if (len == 0)
-	    {
-	    	printf("The client dropped the connection.\n");
-		break;
-	    }
+            else if (len == 0)
+            {
+                printf("The client dropped the connection.\n");
+                break;
+            }
             
-            printf("%s\n", buf);
             char *operation = malloc(sizeof(char) * (strlen(buf)+1));
             strcpy(operation, buf);
             
-            if (!strcmp(operation, "REQ")) 
-        	{
-        		printf("Querying client for file name ... \n");
-        		memset(buf, 0, sizeof(buf));
-        		strcpy(buf, "ACK_REQ");
-        		// send acknowledgment of the requestion to the client
-        		if (send(new_s, buf, sizeof(buf), 0) < 0)
-        		{
-        			fprintf(stderr, "error sending REQ_ACK to client\n");
-        			exit(1);
-        		}
-
-        		send_file(new_s);
+            if (!strcmp(operation, "REQ"))
+            {
+                printf("Querying client for file name ... \n");
+                memset(buf, 0, sizeof(buf));
+                strcpy(buf, "ACK_REQ");
+                // send acknowledgment of the requestion to the client
+                if (send(new_s, buf, sizeof(buf), 0) < 0)
+                {
+                    fprintf(stderr, "error sending REQ_ACK to client\n");
+                    exit(1);
+                }
+                
+                send_file(new_s);
             }
             else if (!strcmp(operation,"UPL")) {
                 /// Prepare buffer to receive fresh new data
@@ -146,7 +148,6 @@ int main(int argc, char *argv[]) {
                 }
                 
                 uint16_t filename_len = ntohs(*(uint16_t*)buf);
-                printf("'%d'\n", filename_len);
                 
                 // Prepare buffer to receive fresh new data
                 memset(buf, 0, MAX_LINE);
@@ -166,8 +167,6 @@ int main(int argc, char *argv[]) {
                 strcpy(filename, buf);
                 
                 FILE *newfp = fopen(filename, "w+");
-                
-                printf("%s %d %s\n", operation, filename_len, filename);
                 
                 if (send(new_s, "READY", sizeof(char)*6, 0) < 0)
                 {
@@ -224,13 +223,12 @@ int main(int argc, char *argv[]) {
                     memset(buf, 0, MAX_LINE);
                 }
                 
-                printf("Upload complete\n");
-                
                 struct timeval endTimestamp;
                 gettimeofday(&endTimestamp, NULL);
                 long int end_time = endTimestamp.tv_sec;
                 long int end_time_usec = endTimestamp.tv_usec;
                 
+                memset(buf, 0, MAX_LINE);
                 // Receive the md5 hash value
                 if ((numbytes = recv(new_s, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
                 {
@@ -239,10 +237,7 @@ int main(int argc, char *argv[]) {
                     exit(1);
                 }
                 
-                char md5client[2*MD5_DIGEST_LENGTH];
-                memset(buf,0,2*MD5_DIGEST_LENGTH);
-                strcpy(md5client, buf);
-                printf("buf: %s\n", buf);
+                char *md5client = strdup(buf);
                 
                 int fileSize;
                 char *message = malloc(sizeof(char));
@@ -255,7 +250,7 @@ int main(int argc, char *argv[]) {
                 message = malloc(sizeof(char)*fileSize);
                 fread(message, 1, fileSize, newfp);
                 
-                
+    
                 
                 // Calculate the MD5of the recieved file
                 unsigned char md5server[MD5_DIGEST_LENGTH];
@@ -275,36 +270,54 @@ int main(int argc, char *argv[]) {
                 
                 //check md5
                 
-                printf("md5output: %s\nmd5client: %s", md5output, md5client);
-                if(strcmp(md5output,md5client) != 0)
+                int dif = strcmp(md5output,md5client);
+                if(dif != 0)
                 {
                     fprintf(stderr, "myftp: ERROR!!! File hashes do not match - bad transfer\n");
+                    sprintf(output, "File hashes do not match - bad transfer.\n");
                     if (remove(filename))
                         fprintf(stderr, "myftp: Corrupt file removed.");
                     else
                         fprintf(stderr, "myftp: Corrupt file could not be removed.");
                 }
+                else {
+                    sprintf(output,"%d bytes transferred in %.3f seconds : %.3f Megabytes/sec.\nFile MD5sum: %s",fileSize,transtime, throughput, md5output);
+                }
                 
-                sprintf(output,"%d bytes transferred in %.3f seconds : %.3f Megabytes/sec.\nFile MD5sum: %s",fileSize,transtime, throughput, md5output);
-                printf("%s \n",output);
+                uint16_t message_length = strlen(output) + 1;
+                uint16_t message_byte_order = htons(message_length);
+                
+                // Send the length of the output message to the server
+                if (send(new_s, &message_byte_order, sizeof(uint16_t), 0) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Call to send() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                }
+                
+                // Send the name of the requested file to the server
+                if (send(new_s, output, strlen(output) + 1, 0) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Call to send() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                }
                 fflush(stdout);
                 fclose(newfp);
             }
-            else if (!strcmp(operation,"DEL")) 
-	    {
-            
-	    }
-            else if (!strcmp(operation,"LIS")) 
-	    {
+            else if (!strcmp(operation,"DEL"))
+            {
+                
+            }
+            else if (!strcmp(operation,"LIS"))
+            {
                 
             }
             else if (!strcmp(operation,"XIT"))
             {
                 printf("Closing connection with client.\n");
                 // break out of the while loop and look for a new client
-                break;                
+                break;
             }
-            else 
+            else
 	    {
                 fprintf(stderr, "myftp: ERROR!!! unknown operation!\n");
             }

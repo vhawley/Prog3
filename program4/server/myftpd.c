@@ -11,7 +11,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
+#include <errno.h>
 #include <openssl/md5.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
         
 		// Prepare buffer to receive fresh new data
 		memset(buf, 0, MAX_LINE);
-		
+
         //receive operation message
         len = recv(new_s, buf, sizeof(buf), 0);
         if (len == -1) {
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
         }
         
         printf("'%s'\n", buf);
-        char *operation = malloc(sizeof(char) * (strlen(buf)+1));
+        char *operation = malloc(sizeof(char) * (strlen(buf)+1));    
         strcpy(operation, buf);
         
         if (!strcmp(operation, "REQ")) {
@@ -144,6 +144,102 @@ int main(int argc, char *argv[]) {
             printf("'%s' '%d' '%s'\n", operation, filename_len, filename);
         }
         else if (!strcmp(operation,"DEL")) {
+            /// Prepare buffer to receive fresh new data
+            memset(buf, 0, MAX_LINE);
+            //receive filename length           
+            len = recv(new_s, buf, sizeof(uint16_t), 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving message\n");
+                exit(1);
+            }
+            if (len == 0) {
+                break;
+            }
+
+            uint16_t filename_len = ntohs(*(uint16_t*)buf);
+            char *filefound = malloc(sizeof(char));
+            // Prepare buffer to receive fresh new data
+            memset(buf, 0, MAX_LINE);
+            
+            //receive filename which we now have the size of from the previous message
+            len = recv(new_s, buf, filename_len, 0);
+            if (len == -1) {
+                fprintf(stderr, "error receiving message\n");
+                exit(1);
+            }
+            if (len == 0) {
+                printf("filename length == 0, breaking...\n");
+                break;
+            }
+           
+            
+            //Verify that the recieved filename has the same length as the lenght sent by the client
+            if( filename_len != strlen(buf)){
+                fprintf(stderr, "error filename lengths do not match\n");
+               
+            }
+            
+            char *filename = malloc(sizeof(buf));
+            strcpy(filename, buf);
+            
+            printf("'%s' '%d' '%s'\n", operation, filename_len, filename);
+            
+            if( access( filename, F_OK ) != -1 ) {
+                filefound = "1";
+                
+                // Send if file was found
+                if (send(new_s, filefound, strlen(filefound), 0) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                }
+                
+                // Prepare buffer to receive fresh new data
+                memset(buf, 0, MAX_LINE);
+
+                //Receive Confirmation from client
+                len = recv(new_s, buf, sizeof(buf), 0);
+                printf("%s\n",buf);
+                if ((len = recv(new_s, buf, sizeof(buf), 0)) < 0) {
+                    fprintf(stderr, "error receiving message\n");
+                    exit(1);
+                }
+                if (len == 0) {
+                    printf("filename length == 0, breaking...\n");
+                    break;
+                }
+                char *confirmation = malloc(sizeof(buf));
+                strcpy(confirmation, buf);
+                printf("%s\n",confirmation);
+                if (!strcmp(confirmation,"Yes")) {
+                    filefound = "1";
+                    if(remove(filename) < 0)
+                    {
+                        fprintf(stderr, "myftpd: ERROR!!! Delete failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                        filefound = "-1";
+                    }
+
+                    // Send if file was deleted reusing variable
+                    if (send(new_s, filefound, strlen(filefound), 0) < 0)
+                    {
+                        fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                    }
+                }
+                
+            } else {
+                filefound = "-1";
+                
+                // Send if file was found
+                if (send(new_s, filefound, strlen(filefound), 0) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                }
+            } 
+            fflush(stdout);
+            
         }
         else if (!strcmp(operation,"LIS")) {
             
@@ -158,7 +254,7 @@ int main(int argc, char *argv[]) {
         //clean stuff
         fflush(stdout);
         bzero(buf, sizeof(buf));
-
+        printf("Waiting for next operation\n");
     }
     
     return 0;

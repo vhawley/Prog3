@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     // Record the arguments in string objects
     char* server = argv[1];
     char* port = argv[2];
-    
+    char *buf = malloc(sizeof(char) * MAX_LINE);
     // Ensure that the port is actually a port number
     if (atoi(port) > 65536)
     {
@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     }
     
     // Initialize variables for TCP connection
-    int sockfd, servercheck;
+    int sockfd, servercheck, numbytes;
     struct addrinfo help, *serverinfo, *p;
     char s[INET6_ADDRSTRLEN];
     
@@ -132,7 +132,6 @@ int main(int argc, char *argv[]) {
     	// without a second arg don't have an awkward hang while it waits 
     	// for the second input word
     	scanf("%s", input);
-
     	command = strtok(input, " ");
     	arg = strtok(NULL, " ");
            
@@ -191,6 +190,88 @@ int main(int argc, char *argv[]) {
 	
         else if (!strcmp(command,"DEL")) {
             
+            // Send the name of the operation to the server
+            if (send(sockfd, command, sizeof(command), 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! First call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+                      
+            printf("Enter filename: ");
+            memset(input, 0, sizeof(input));
+            scanf("%s", input);
+            command = strtok(NULL, " ");
+    	    arg = strtok(input, " ");
+
+            // Send the length of the name of the requested file to the server
+            uint16_t file_name_len = strlen(arg);
+            uint16_t network_byte_order = htons(file_name_len);
+            // Send the lenght of the name of the requested file to the server
+            if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+            // Send the name of the requested file to the server
+            if (send(sockfd, arg, strlen(arg)+6, 0) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+            }
+            
+            // Prepare buffer to receive fresh new data
+            memset(buf, 0, MAX_LINE);
+            // Checking if file was found
+            if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) < 0)
+            {
+                fprintf(stderr, "myftp: ERROR!!! call to recv() failed!\n");
+                fprintf(stderr, "errno: %s\n", strerror(errno));
+                exit(1);
+            }      
+            char *filesize_server = malloc(sizeof(buf));
+            strcpy(filesize_server, buf);
+
+            if( !strcmp(filesize_server,"-1")){
+                printf("The file does not exist on server.\n");
+            }
+            else{
+                int confirmation = 0;
+                while(!confirmation){
+                    printf("Do you want to delete the file(Yes/No): ");
+                    memset(input, 0, sizeof(input));
+                    scanf("%s", input);
+                    command = strtok(NULL, " ");
+                    arg = strtok(input, " ");
+                    if(!strcmp(arg,"No") || !strcmp(arg,"Yes")){
+                        confirmation = 1;   
+                    }
+                }
+                
+                // Send the confrimation from the user
+                if (send(sockfd, arg, sizeof(arg), 0) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                }
+                
+                
+                if(!strcmp(arg,"No")){
+                    printf("Delete abandoned by the user!\n");   
+                }else{
+                    
+                    if ((numbytes = recv(sockfd, buf, sizeof(buf), 0)) < 0)
+                    {
+                        fprintf(stderr, "myftp: ERROR!!! call to recv() failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                        exit(1);
+                    }      
+                    char *deleted = malloc(sizeof(buf));
+                    strcpy(deleted, buf);
+                    if( !strcmp(deleted,"-1")){
+                        printf("Problems deleting the file at the server.\n");
+                    }
+                }
+            }
         }
        
 	//

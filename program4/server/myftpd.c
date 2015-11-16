@@ -136,25 +136,25 @@ int main(int argc, char *argv[]) {
                 memset(buf, 0, MAX_LINE);
                 
                 //receive filename length
-                len = recv(new_s, buf, sizeof(buf), 0);
+                len = recv(new_s, buf, sizeof(uint16_t), 0);
                 if (len == -1) {
-                    fprintf(stderr, "error receiving message\n");
+                    fprintf(stderr, "error receiving filename length message\n");
                     exit(1);
                 }
                 if (len == 0) {
                     break;
                 }
-
+                
                 uint16_t filename_len = ntohs(*(uint16_t*)buf);
-                printf("'%d'\n", len);
+                printf("'%d'\n", filename_len);
                 
                 // Prepare buffer to receive fresh new data
                 memset(buf, 0, MAX_LINE);
                 
                 //receive filename which we now have the size of from the previous message
-                len = recv(new_s, buf, sizeof(buf), 0);
+                len = recv(new_s, buf, filename_len+1, 0);
                 if (len == -1) {
-                    fprintf(stderr, "error receiving message\n");
+                    fprintf(stderr, "error receiving filename message\n");
                     exit(1);
                 }
                 if (len == 0) {
@@ -165,7 +165,130 @@ int main(int argc, char *argv[]) {
                 char *filename = malloc(sizeof(buf));
                 strcpy(filename, buf);
                 
-                printf("'%s' '%d' '%s'\n", operation, filename_len, filename);
+                FILE *newfp = fopen(filename, "w+");
+                
+                printf("%s %d %s\n", operation, filename_len, filename);
+                
+                if (send(new_s, "READY", sizeof(char)*6, 0) < 0)
+                {
+                    fprintf(stderr, "myftpd: ERROR!!! Call to send() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                }
+                
+                // Prepare buffer to receive fresh new data
+                memset(buf, 0, MAX_LINE);
+                
+                
+                //receive file size
+                len = recv(new_s, buf, sizeof(uint32_t), 0);
+                if (len == -1) {
+                    fprintf(stderr, "error receiving file size message\n");
+                    exit(1);
+                }
+                if (len == 0) {
+                    printf("fileSize == 0, breaking...\n");
+                    break;
+                    
+                }
+                
+                uint32_t fileSizeClient = ntohl(*(uint32_t*)buf);
+                int total = 0;
+                int numbytes;
+                
+                struct timeval begTimestamp;
+                memset(&begTimestamp, 0, sizeof(begTimestamp));
+                gettimeofday(&begTimestamp, NULL);
+                long int start_time = begTimestamp.tv_sec;
+                long int start_time_usec = begTimestamp.tv_usec;
+                
+                while((numbytes = recv(new_s, buf, MAX_LINE, 0)) > 0) {
+                    // Ensure there was no error receiving the data from the server
+                    if (numbytes  < 0)
+                    {
+                        fprintf(stderr, "myftp: ERROR!!! Third call to recv() failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                        exit(1);
+                    }
+                    total += numbytes;
+                    // Write to the new file
+                    if (fwrite(buf,1,numbytes, newfp) < 0)
+                    {
+                        fprintf(stderr, "myftp: ERROR!!! Call to fputs() failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                        exit(1);
+                    }
+                    if(fileSizeClient <= total){
+                        break;
+                    }
+                    // Clear the buffer for the next round
+                    memset(buf, 0, MAX_LINE);
+                }
+                
+                printf("Upload complete\n");
+                
+                struct timeval endTimestamp;
+                gettimeofday(&endTimestamp, NULL);
+                long int end_time = endTimestamp.tv_sec;
+                long int end_time_usec = endTimestamp.tv_usec;
+                
+                // Receive the md5 hash value
+                if ((numbytes = recv(new_s, buf, 2*MD5_DIGEST_LENGTH, 0)) < 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! 2nd call to recv() failed!\n");
+                    fprintf(stderr, "errno: %s\n", strerror(errno));
+                    exit(1);
+                }
+                
+                char md5client[2*MD5_DIGEST_LENGTH];
+                memset(buf,0,2*MD5_DIGEST_LENGTH);
+                strcpy(md5client, buf);
+                printf("buf: %s\n", buf);
+                
+                int fileSize;
+                char *message = malloc(sizeof(char));
+                message[0] = 0;
+                //attempt to read file.
+                fseek(newfp, 0L, SEEK_END);
+                // get size of file
+                fileSize = ftell(newfp);
+                fseek(newfp, 0L, SEEK_SET);
+                message = malloc(sizeof(char)*fileSize);
+                fread(message, 1, fileSize, newfp);
+                
+                
+                
+                // Calculate the MD5of the recieved file
+                unsigned char md5server[MD5_DIGEST_LENGTH];
+                char md5output[2*MD5_DIGEST_LENGTH];
+                MD5((unsigned char*) message, fileSize, md5server);
+                munmap(message, fileSize);
+                // Map the md5 value to a string
+                md5_to_string(md5output,md5server);
+                
+                //calculate time difference
+                long int timeDifInMicros = (end_time - start_time) * 1000000 + (end_time_usec - start_time_usec);
+                double transtime = ((double)timeDifInMicros) / 1000000;
+                double throughput = ((double)fileSize / 1000000) / transtime;
+                
+                char output[MAX_LINE];
+                fflush(stdout);
+                
+                //check md5
+                
+                printf("md5output: %s\nmd5client: %s", md5output, md5client);
+                if(strcmp(md5output,md5client) != 0)
+                {
+                    fprintf(stderr, "myftp: ERROR!!! File hashes do not match - bad transfer\n");
+                    if (remove(filename))
+                        fprintf(stderr, "myftp: Corrupt file removed.");
+                    else
+                        fprintf(stderr, "myftp: Corrupt file could not be removed.");
+                }
+                
+                sprintf(output,"%d bytes transferred in %.3f seconds : %.3f Megabytes/sec.\nFile MD5sum: %s",fileSize,transtime, throughput, md5output);
+                printf("%s \n",output);
+                fflush(stdout);
+                fclose(newfp);
             }
             else if (!strcmp(operation,"DEL")) 
 	    {

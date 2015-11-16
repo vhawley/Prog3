@@ -321,7 +321,6 @@ int main(int argc, char *argv[]) {
 	    {
                 fprintf(stderr, "myftp: ERROR!!! unknown operation!\n");
             }
-            
             //clean stuff
             fflush(stdout);
             bzero(buf, sizeof(buf));

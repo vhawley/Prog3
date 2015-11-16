@@ -181,7 +181,7 @@ int main(int argc, char *argv[]) {
             char arg[MAX_LINE];
             memset(arg, 0, MAX_LINE);
             
-            FILE *f;
+            FILE *f = NULL;
             int fileSize;
             while (f == NULL) {
                 printf("Enter filename: ");
@@ -287,7 +287,7 @@ int main(int argc, char *argv[]) {
                 
                 printf("%s\n", buf);
             }
-            
+            fclose(f);
             
             free(message);
         }

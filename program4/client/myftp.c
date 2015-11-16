@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
     {
         printf("Please enter a command (REQ, UPL, LIS, DEL, or XIT): ");
         
-        char command[MAX_LINE];
+        char command[MAX_LINE], input[MAX_LINE];
         memset(command, 0, MAX_LINE);
         
         scanf("%s", command);
@@ -167,8 +167,8 @@ int main(int argc, char *argv[]) {
     	}
            
     	//
-    	///////////////// UPL /////////////////////////////////
-    	//
+        ///////////////// UPL /////////////////////////////////
+        //
  
 
         else if (!strcmp(command,"UPL")) {
@@ -202,16 +202,10 @@ int main(int argc, char *argv[]) {
                 }
             }
             
-            printf("Enter filename: ");
-    	    memset(input, 0, sizeof(input));
-            scanf("%s", input);
-    	    char *filename = input;
-            
-            // Send the length of the name of the requested file to the server
-            uint16_t file_name_len = strlen(filename);
+            uint16_t file_name_len = strlen(arg);
             uint16_t network_byte_order = htons(file_name_len);
             
-            // Send the length of the name of the requested file to the server
+            // Send the lenght of the name of the requested file to the server
             if (send(sockfd, &network_byte_order, sizeof(uint16_t), 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! Second call to send() failed!\n");
@@ -219,7 +213,7 @@ int main(int argc, char *argv[]) {
             }
             
             // Send the name of the requested file to the server
-            if (send(sockfd, filename, sizeof(arg), 0) < 0)
+            if (send(sockfd, arg, strlen(arg)+1, 0) < 0)
             {
                 fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
                 fprintf(stderr, "errno: %s\n", strerror(errno));
@@ -270,9 +264,9 @@ int main(int argc, char *argv[]) {
             free(message);
         }
        
-	//
-	///////////////// DEL /////////////////////////////////
-	//
+    //
+    ///////////////// DEL /////////////////////////////////
+    //
 	
         else if (!strcmp(command,"DEL")) {
             

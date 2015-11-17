@@ -348,32 +348,32 @@ int main(int argc, char *argv[]) {
 
                 char *filefound = malloc(sizeof(char));
                 if( access( filename, F_OK ) != -1 ) {
-                filefound = "1";
-                
-                // Send if file was found
-                if (send(new_s, filefound, strlen(filefound), 0) < 0)
-                {
-                    fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
-                    fprintf(stderr, "errno: %s\n", strerror(errno));
-                }
-                
-                // Prepare buffer to receive fresh new data
-                memset(buf, 0, MAX_LINE);
+                    filefound = "1";
 
-                //Receive Confirmation from client
-                len = recv(new_s, buf, sizeof(buf), 0);
-                printf("%s\n",buf);
-                if ((len = recv(new_s, buf, sizeof(buf), 0)) < 0) {
-                    fprintf(stderr, "error receiving message\n");
-                    exit(1);
-                }
-                if (len == 0) {
-                    printf("filename length == 0, breaking...\n");
-                    break;
-                }
-                char *confirmation = malloc(sizeof(buf));
-                strcpy(confirmation, buf);
-                printf("%s\n",confirmation);
+                    // Send if file was found
+                    if (send(new_s, filefound, strlen(filefound), 0) < 0)
+                    {
+                        fprintf(stderr, "myftp: ERROR!!! Third call to send() failed!\n");
+                        fprintf(stderr, "errno: %s\n", strerror(errno));
+                    }
+
+                    // Prepare buffer to receive fresh new data
+                    memset(buf, 0, MAX_LINE);
+
+                    //Receive Confirmation from client
+                    len = recv(new_s, buf, sizeof(buf), 0);
+                    printf("%s\n",buf);
+                    if ((len = recv(new_s, buf, sizeof(buf), 0)) < 0) {
+                        fprintf(stderr, "error receiving message\n");
+                        exit(1);
+                    }
+                    if (len == 0) {
+                        printf("filename length == 0, breaking...\n");
+                        break;
+                    }
+                    char *confirmation = malloc(sizeof(buf));
+                    strcpy(confirmation, buf);
+
                 if (!strcmp(confirmation,"Yes")) {
                     filefound = "1";
                     if(remove(filename) < 0)
@@ -417,7 +417,6 @@ int main(int argc, char *argv[]) {
                 {
                     while ((dir = readdir(d)) != NULL)
                     {
-                      printf("%s\n", dir->d_name);
                       sprintf(item,"%s\n",dir->d_name);                     
                       strcat(listing, item);
                         

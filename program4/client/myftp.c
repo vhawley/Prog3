@@ -396,6 +396,7 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "errno: %s\n", strerror(errno));
             }
             
+            memset(buf, 0, MAX_LINE);
             //receive file size
             len = recv(sockfd, buf, sizeof(uint32_t), 0);
             if (len == -1) {
@@ -409,9 +410,9 @@ int main(int argc, char *argv[]) {
             }
 
             uint32_t direcSize = ntohl(*(uint32_t*)buf);
-            printf("%d\n",direcSize);
             // Wait for the directory contents to be sent back
             if(direcSize < MAX_LINE){
+                memset(buf, 0, MAX_LINE);
                 len = recv(sockfd, buf, direcSize, 0);
                 if (len == -1) {
                     fprintf(stderr, "myftp: ERROR!!! Problem recieving directory listing\n");
@@ -448,6 +449,7 @@ int main(int argc, char *argv[]) {
                     memset(buf, 0, MAX_LINE);
                 }
                 printf("%s\n",listing);
+                memset(listing, 0, MAX_LINE);
             }
         }
        

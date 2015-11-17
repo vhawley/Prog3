@@ -1,0 +1,4 @@
+The server directory contains myftpd.c and a makefile for building it.
+The client directory contains myftp.c and a makefile for building it as
+well. The program4 directory contains the server directory, the client directory
+and this README file.

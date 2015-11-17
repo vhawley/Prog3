@@ -346,7 +346,6 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "error filename lengths do not match\n");
                 }
 
-                printf("'%s' '%d' '%s'\n", operation, filename_len, filename);
                 char *filefound = malloc(sizeof(char));
                 if( access( filename, F_OK ) != -1 ) {
                 filefound = "1";

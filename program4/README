@@ -2,3 +2,11 @@ The server directory contains myftpd.c and a makefile for building it.
 The client directory contains myftp.c and a makefile for building it as
 well. The program4 directory contains the server directory, the client directory
 and this README file.
+
+To start the server run the command: "./myftpd 41008" on student03.cse.nd.edu
+
+To start the client run the command: "./myftp student03.cse.nd.edu 41008"
+
+Note that the machine that the server runs on need not be student03.cse.nd.edu,
+but if it is a different machine then the client's run command must reflect this
+by having that machine's name as the second argument.
